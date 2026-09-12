@@ -16,6 +16,7 @@ import {
   recalculateInspection,
   listInspections,
   generateReport,
+  updatePdpFace,
 } from '../controllers/inspectionController';
 import {
   listRules,
@@ -62,6 +63,7 @@ router.get('/dashboard', getDashboardStats);
 // INSPECTIONS WORKFLOW
 router.post('/inspections/auto-scan', upload.array('images', 10), autoScanInspection);
 router.post('/inspections/:id/confirm-and-evaluate', confirmAndEvaluateInspection);
+router.post('/inspections/:id/update-pdp', updatePdpFace);
 router.post('/inspections', createInspection);
 router.get('/inspections', listInspections);
 router.get('/inspections/:id', getInspectionById);

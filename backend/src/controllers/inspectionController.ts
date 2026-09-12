@@ -52,12 +52,13 @@ export const autoScanInspection = async (req: any, res: Response) => {
     let fullOcrText = '';
     let totalConfidence = 0;
     const savedImages = [];
+    const faceOcrInputs = [];
 
-    // 3. Process Uploaded Images & Perform OCR
+    // 3. Process Uploaded Images & Perform Face-Specific OCR
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const relPath = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
-      const imageType = imageTypes[i] || (i === 0 ? 'FRONT' : i === 1 ? 'BACK' : 'SIDE');
+      const imageType = imageTypes[i] || (i === 0 ? 'FRONT' : i === 1 ? 'BACK' : i === 2 ? 'LEFT_SIDE' : i === 3 ? 'RIGHT_SIDE' : i === 4 ? 'TOP' : 'BOTTOM');
 
       const quality = await ocrService.checkImageQuality(file.path);
       const imgRecord = await prisma.inspectionImage.create({
@@ -72,7 +73,7 @@ export const autoScanInspection = async (req: any, res: Response) => {
       });
       savedImages.push(imgRecord);
 
-      const ocrResult = await ocrService.processImage(file.path);
+      const ocrResult = await ocrService.processImage(file.path, imageType);
       await prisma.ocrResult.create({
         data: {
           inspectionImageId: imgRecord.id,
@@ -83,14 +84,21 @@ export const autoScanInspection = async (req: any, res: Response) => {
         },
       });
 
+      faceOcrInputs.push({
+        face: imageType,
+        imageId: imgRecord.id,
+        fullText: ocrResult.fullText,
+        boundingBoxes: ocrResult.boundingBoxes,
+      });
+
       fullOcrText += '\n' + ocrResult.fullText;
       totalConfidence += ocrResult.confidence;
     }
 
     const primaryImageId = savedImages[0]?.id;
 
-    // 4. Perform AI Extraction & Category Inference
-    const extractedFields = aiExtractionService.extractDeclarations(fullOcrText, primaryImageId);
+    // 4. Perform Multi-Face AI Extraction & Category Inference
+    const extractedFields = aiExtractionService.extractDeclarations(faceOcrInputs, primaryImageId);
     const categoryInference = aiExtractionService.inferProductCategory(fullOcrText);
 
     // 5. Perform Image Coverage Analysis
@@ -122,11 +130,19 @@ export const autoScanInspection = async (req: any, res: Response) => {
           fieldLabel: field.fieldLabel,
           rawValue: field.rawValue,
           normalizedValue: field.normalizedValue !== undefined ? String(field.normalizedValue) : null,
+          originalText: field.originalText || null,
+          language: field.language || null,
+          script: field.script || null,
+          languageConfidence: field.languageConfidence || null,
           unit: field.unit || null,
           confidence: field.confidence,
+          sourceFace: field.sourceFace || null,
+          detectedFace: field.detectedFace || field.sourceFace || null,
+          placementStatus: field.placementStatus || null,
           sourceImageId: field.sourceImageId || null,
           sourceRegionJson: field.sourceRegionJson || null,
           sourceText: field.sourceText || null,
+          measurementsJson: field.measurements ? JSON.stringify(field.measurements) : null,
           extractionMethod: 'AI_ASSISTED',
           reviewRequired: field.reviewRequired || field.confidence < 0.8,
         },
@@ -160,8 +176,8 @@ export const autoScanInspection = async (req: any, res: Response) => {
  */
 export const confirmAndEvaluateInspection = async (req: any, res: Response) => {
   try {
-    const { id } = req.params;
-    const { confirmedProduct, confirmedFields } = req.body;
+    const id = req.params.id || req.body.inspectionId;
+    const { confirmedProduct, confirmedFields, pdpFace } = req.body;
 
     const inspection = await prisma.inspection.findUnique({
       where: { id },
@@ -183,18 +199,35 @@ export const confirmAndEvaluateInspection = async (req: any, res: Response) => {
       });
     }
 
+    // Update PDP Face if provided
+    const targetPdp = (pdpFace || inspection.pdpFace || 'FRONT').toUpperCase();
+    await prisma.inspection.update({
+      where: { id },
+      data: {
+        pdpFace: targetPdp,
+        pdpDeterminationMethod: pdpFace ? 'MANUAL' : inspection.pdpDeterminationMethod || 'AI',
+      },
+    });
+
     // 2. Audit & Update Confirmed / Corrected Fields
     if (Array.isArray(confirmedFields)) {
       for (const field of confirmedFields) {
         const dbField = inspection.extractedFields.find((f) => f.fieldKey === field.fieldKey);
         if (dbField) {
           const isValueEdited = dbField.rawValue !== field.rawValue;
+          const srcFace = (field.sourceFace || dbField.sourceFace || 'RIGHT_SIDE').toUpperCase();
+          const isOnPdp = srcFace === targetPdp;
+          const placementStatus = field.rawValue ? (isOnPdp ? 'DETECTED_CORRECT_PDP' : 'DETECTED_WRONG_PDP') : 'NOT_DETECTED';
+
           await prisma.extractedField.update({
             where: { id: dbField.id },
             data: {
               rawValue: field.rawValue,
               normalizedValue: field.normalizedValue || field.rawValue,
               unit: field.unit || dbField.unit,
+              sourceFace: srcFace,
+              detectedFace: field.detectedFace || dbField.detectedFace || srcFace,
+              placementStatus,
               isCorrected: isValueEdited,
               correctedValue: isValueEdited ? field.rawValue : dbField.correctedValue,
               correctedByUserId: isValueEdited ? req.user.id : dbField.correctedByUserId,
@@ -236,6 +269,8 @@ export const confirmAndEvaluateInspection = async (req: any, res: Response) => {
       category: refreshedInspection?.product?.category,
       packageType: refreshedInspection?.product?.packageType,
       isRetailPackage: true,
+      pdpFace: refreshedInspection?.pdpFace || targetPdp,
+      pdpDeterminationMethod: refreshedInspection?.pdpDeterminationMethod || 'AI',
       netQuantityValue: netQtyField?.normalizedValue ? parseFloat(String(netQtyField.normalizedValue)) : undefined,
       netQuantityUnit: netQtyField?.unit || undefined,
       hasPhysicalMeasurement: false,
@@ -246,11 +281,18 @@ export const confirmAndEvaluateInspection = async (req: any, res: Response) => {
       fieldLabel: f.fieldLabel,
       rawValue: f.rawValue,
       normalizedValue: f.normalizedValue,
+      originalText: f.originalText,
+      language: f.language,
+      script: f.script,
+      languageConfidence: f.languageConfidence,
       unit: f.unit,
       confidence: f.confidence,
+      sourceFace: f.sourceFace,
+      placementStatus: f.placementStatus as any,
       sourceImageId: f.sourceImageId,
       sourceRegionJson: f.sourceRegionJson,
       sourceText: f.sourceText,
+      measurements: f.measurementsJson ? JSON.parse(f.measurementsJson) : undefined,
       reviewRequired: f.reviewRequired,
     }));
 
@@ -279,11 +321,19 @@ export const confirmAndEvaluateInspection = async (req: any, res: Response) => {
           result: ev.result,
           requirementText: ev.requirementText,
           extractedValue: ev.extractedValue || null,
+          originalText: ev.originalText || null,
+          language: ev.language || null,
+          script: ev.script || null,
+          languageConfidence: ev.languageConfidence || null,
           expectedCondition: ev.expectedCondition || null,
           reason: ev.reason,
           confidence: ev.confidence,
+          sourceFace: ev.sourceFace || null,
+          detectedFace: ev.detectedFace || ev.sourceFace || null,
+          placementStatus: ev.placementStatus || null,
           evidenceImageId: ev.evidenceImageId || null,
           evidenceRegionJson: ev.evidenceRegionJson || null,
+          measurementsJson: ev.measurements ? JSON.stringify(ev.measurements) : null,
           sourcePage: ev.sourcePage || null,
           ruleVersion: ev.ruleVersion,
         },
@@ -487,6 +537,8 @@ export const analyzeInspection = async (req: any, res: Response) => {
       category: inspection.product?.category,
       packageType: inspection.product?.packageType,
       isRetailPackage: true,
+      pdpFace: inspection.pdpFace || 'FRONT',
+      pdpDeterminationMethod: inspection.pdpDeterminationMethod || 'AI',
       netQuantityValue: netQtyField?.normalizedValue ? parseFloat(String(netQtyField.normalizedValue)) : undefined,
       netQuantityUnit: netQtyField?.unit || undefined,
       hasPhysicalMeasurement: false,
@@ -517,6 +569,9 @@ export const analyzeInspection = async (req: any, res: Response) => {
           expectedCondition: ev.expectedCondition || null,
           reason: ev.reason,
           confidence: ev.confidence,
+          sourceFace: ev.sourceFace || null,
+          detectedFace: ev.detectedFace || ev.sourceFace || null,
+          placementStatus: ev.placementStatus || null,
           evidenceImageId: ev.evidenceImageId || null,
           evidenceRegionJson: ev.evidenceRegionJson || null,
           sourcePage: ev.sourcePage || null,
@@ -666,6 +721,8 @@ async function recalculateInspectionEngine(inspectionId: string) {
     normalizedValue: f.normalizedValue,
     unit: f.unit,
     confidence: f.confidence,
+    sourceFace: f.sourceFace,
+    placementStatus: f.placementStatus as any,
     sourceImageId: f.sourceImageId,
     sourceRegionJson: f.sourceRegionJson,
     sourceText: f.sourceText,
@@ -678,6 +735,8 @@ async function recalculateInspectionEngine(inspectionId: string) {
     category: inspection.product?.category,
     packageType: inspection.product?.packageType,
     isRetailPackage: true,
+    pdpFace: inspection.pdpFace || 'FRONT',
+    pdpDeterminationMethod: inspection.pdpDeterminationMethod || 'AI',
     netQuantityValue: netQtyField?.normalizedValue ? parseFloat(String(netQtyField.normalizedValue)) : undefined,
     netQuantityUnit: netQtyField?.unit || undefined,
     hasPhysicalMeasurement: false,
@@ -710,6 +769,9 @@ async function recalculateInspectionEngine(inspectionId: string) {
         expectedCondition: ev.expectedCondition || null,
         reason: ev.reason,
         confidence: ev.confidence,
+        sourceFace: ev.sourceFace || null,
+        detectedFace: ev.detectedFace || ev.sourceFace || null,
+        placementStatus: ev.placementStatus || null,
         evidenceImageId: ev.evidenceImageId || null,
         evidenceRegionJson: ev.evidenceRegionJson || null,
         sourcePage: ev.sourcePage || null,
@@ -811,5 +873,31 @@ export const generateReport = async (req: any, res: Response) => {
     return res.json({ reportUrl: `/${relReportPath}`, report: reportRecord });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Error generating PDF report' });
+  }
+};
+
+/**
+ * Controller to manually update Principal Display Panel (PDP) designated face
+ */
+export const updatePdpFace = async (req: any, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { pdpFace } = req.body;
+
+    if (!pdpFace) return res.status(400).json({ error: 'pdpFace is required' });
+
+    await prisma.inspection.update({
+      where: { id },
+      data: {
+        pdpFace: pdpFace.toUpperCase(),
+        pdpDeterminationMethod: 'MANUAL',
+      },
+    });
+
+    // Re-evaluate rules with updated PDP
+    return confirmAndEvaluateInspection(req, res);
+  } catch (err: any) {
+    console.error('Error updating PDP face:', err);
+    return res.status(500).json({ error: err.message || 'Error updating Principal Display Panel face.' });
   }
 };

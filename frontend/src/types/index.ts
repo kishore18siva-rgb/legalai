@@ -23,10 +23,27 @@ export interface Product {
   countryOfOrigin?: string;
 }
 
+export interface VisualMeasurement {
+  measurementType: 'fontHeight' | 'edgeClearance' | 'textBlockDimensions' | 'placement';
+  sourceFace: string;
+  text?: string;
+  pixelHeight?: number;
+  estimatedPhysicalHeightMm?: number;
+  requiredMinimumMm?: number;
+  distancePixels?: number;
+  distanceMm?: number;
+  status: 'PASS' | 'FAIL' | 'REVIEW';
+  isCalibrated: boolean;
+  calibrationNote?: string;
+  confidence: number;
+}
+
+export type PlacementStatus = 'DETECTED_CORRECT_PDP' | 'DETECTED_WRONG_PDP' | 'NOT_DETECTED';
+
 export interface InspectionImage {
   id: string;
   inspectionId: string;
-  imageType: 'FRONT' | 'BACK' | 'SIDE' | 'TOP_BOTTOM' | 'CLOSEUP';
+  imageType: 'FRONT' | 'BACK' | 'LEFT_SIDE' | 'RIGHT_SIDE' | 'TOP' | 'BOTTOM' | string;
   originalPath: string;
   processedPath?: string;
   qualityStatus: 'GOOD' | 'BLURRY' | 'INSUFFICIENT_QUALITY';
@@ -41,11 +58,20 @@ export interface ExtractedField {
   fieldLabel: string;
   rawValue?: string | null;
   normalizedValue?: string | null;
+  originalText?: string | null;
+  language?: string | null;
+  script?: string | null;
+  languageConfidence?: number | null;
   unit?: string | null;
   confidence: number;
+  sourceFace?: string | null;
+  detectedFace?: string | null;
+  placementStatus?: PlacementStatus | null;
   sourceImageId?: string | null;
   sourceRegionJson?: string | null;
   sourceText?: string | null;
+  measurementsJson?: string | null;
+  measurements?: VisualMeasurement[];
   reviewRequired: boolean;
   isCorrected?: boolean;
   correctedValue?: string | null;
@@ -54,6 +80,8 @@ export interface ExtractedField {
 
 export interface ImageCoverageInfo {
   coverageStatus: 'FULL' | 'PARTIAL';
+  facesAccountedFor?: number;
+  totalRequiredFaces?: number;
   detectedPanels: string[];
   missingPanels: string[];
   warningMessage?: string;
@@ -69,6 +97,12 @@ export interface AutoScanResponse {
     categoryConfidence: number;
     categoryReason: string;
   };
+  pdpInfo?: {
+    pdpFace: string;
+    confidence: number;
+    determinationMethod: 'AI' | 'MANUAL';
+    reason?: string;
+  };
   imageCoverage: ImageCoverageInfo;
   extractedFields: ExtractedField[];
   images: InspectionImage[];
@@ -83,11 +117,20 @@ export interface RuleResult {
   result: ComplianceStatus;
   requirementText: string;
   extractedValue?: string | null;
+  originalText?: string | null;
+  language?: string | null;
+  script?: string | null;
+  languageConfidence?: number | null;
   expectedCondition?: string | null;
   reason: string;
   confidence: number;
+  sourceFace?: string | null;
+  detectedFace?: string | null;
+  placementStatus?: PlacementStatus | null;
   evidenceImageId?: string | null;
   evidenceRegionJson?: string | null;
+  measurementsJson?: string | null;
+  measurements?: VisualMeasurement[];
   sourcePage?: number | null;
   ruleVersion: number;
   rule?: LegalRule;
@@ -108,6 +151,8 @@ export interface Inspection {
   failedCount: number;
   reviewCount: number;
   naCount: number;
+  pdpFace?: string;
+  pdpDeterminationMethod?: 'AI' | 'MANUAL' | string;
   ruleVersionUsed: string;
   notes?: string;
   createdAt: string;

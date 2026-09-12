@@ -26,10 +26,10 @@ export const InspectNew: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   const [uploadedImages, setUploadedImages] = useState<
-    { file: File; preview: string; type: 'FRONT' | 'BACK' | 'SIDE' | 'TOP_BOTTOM' | 'CLOSEUP' }[]
+    { file: File; preview: string; type: string }[]
   >([]);
 
-  const [activeImageType, setActiveImageType] = useState<'FRONT' | 'BACK' | 'SIDE' | 'TOP_BOTTOM' | 'CLOSEUP'>('FRONT');
+  const [activeImageType, setActiveImageType] = useState<string>('FRONT');
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
 
   // Analysis Progress Stages
@@ -41,6 +41,7 @@ export const InspectNew: React.FC = () => {
   const [editedProductName, setEditedProductName] = useState('');
   const [editedBrand, setEditedBrand] = useState('');
   const [editedCategory, setEditedCategory] = useState('');
+  const [selectedPdpFace, setSelectedPdpFace] = useState<string>('FRONT');
   const [reviewFields, setReviewFields] = useState<ExtractedField[]>([]);
 
   // Field Edit Drawer / Modal state
@@ -123,6 +124,7 @@ export const InspectNew: React.FC = () => {
         setEditedProductName(data.detectedProduct.name);
         setEditedBrand(data.detectedProduct.brand);
         setEditedCategory(data.detectedProduct.category);
+        setSelectedPdpFace(data.pdpInfo?.pdpFace || 'FRONT');
         setReviewFields(data.extractedFields || []);
 
         setLoading(false);
@@ -164,6 +166,7 @@ export const InspectNew: React.FC = () => {
           category: editedCategory,
         },
         confirmedFields: reviewFields,
+        pdpFace: selectedPdpFace,
       });
 
       // Navigate to Results Page
@@ -226,19 +229,26 @@ export const InspectNew: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {(['FRONT', 'BACK', 'SIDE', 'TOP_BOTTOM', 'CLOSEUP'] as const).map((type) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {[
+              { type: 'FRONT', label: 'ADD FRONT' },
+              { type: 'BACK', label: 'ADD BACK' },
+              { type: 'LEFT_SIDE', label: 'ADD LEFT SIDE' },
+              { type: 'RIGHT_SIDE', label: 'ADD RIGHT SIDE' },
+              { type: 'TOP', label: 'ADD TOP' },
+              { type: 'BOTTOM', label: 'ADD BOTTOM' },
+            ].map((card) => (
               <button
                 type="button"
-                key={type}
+                key={card.type}
                 onClick={() => {
-                  setActiveImageType(type);
+                  setActiveImageType(card.type);
                   setCameraModalOpen(true);
                 }}
                 className="border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50/50 p-4 rounded-xl flex flex-col items-center justify-center space-y-2 text-center transition group"
               >
                 <Camera className="w-6 h-6 text-gray-400 group-hover:text-blue-600" />
-                <span className="text-xs font-bold text-gray-700 uppercase">Add {type}</span>
+                <span className="text-xs font-bold text-gray-700 uppercase">{card.label}</span>
               </button>
             ))}
           </div>
@@ -371,11 +381,72 @@ export const InspectNew: React.FC = () => {
             </div>
           </div>
 
-          {/* Section B: Extracted Mandatory Legal Declarations */}
+          {/* Section B: Principal Display Panel (PDP) Determination & Override */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span>3. Principal Display Panel (PDP) Determination & Override</span>
+              </h2>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded font-mono">
+                Legal Metrology Rules 2011 (Rule 8)
+              </span>
+            </div>
+
+            <div className="bg-blue-50/70 border border-blue-200 p-4 rounded-xl text-xs text-blue-900 space-y-2">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-bold text-sm">
+                    AI Auto-Detected PDP: <span className="text-blue-700 font-black font-mono uppercase">{autoScanData.pdpInfo?.pdpFace || 'FRONT'}</span>
+                  </p>
+                  <p className="mt-1 text-gray-700">
+                    Reason: {autoScanData.pdpInfo?.reason || 'Identified based on primary brand logo and prominent product declaration density.'}
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold bg-blue-200 text-blue-900 px-2 py-1 rounded font-mono">
+                  {Math.round((autoScanData.pdpInfo?.confidence || 0.95) * 100)}% PDP Confidence
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-2">
+                Designate Principal Display Panel (PDP) Surface:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                {[
+                  { type: 'FRONT', label: 'FRONT' },
+                  { type: 'BACK', label: 'BACK' },
+                  { type: 'LEFT_SIDE', label: 'LEFT SIDE' },
+                  { type: 'RIGHT_SIDE', label: 'RIGHT SIDE' },
+                  { type: 'TOP', label: 'TOP' },
+                  { type: 'BOTTOM', label: 'BOTTOM' },
+                ].map((face) => (
+                  <button
+                    type="button"
+                    key={face.type}
+                    onClick={() => setSelectedPdpFace(face.type)}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold font-mono transition text-center ${
+                      selectedPdpFace === face.type
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-400/50'
+                        : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    {face.label}
+                    {autoScanData.pdpInfo?.pdpFace === face.type && selectedPdpFace !== face.type && (
+                      <span className="block text-[8px] font-normal text-blue-600">AI Suggested</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section C: Extracted Mandatory Legal Declarations */}
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
             <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2 border-b pb-2">
               <Layers className="w-4 h-4 text-blue-600" />
-              <span>3. Detected Legal Declarations & Review</span>
+              <span>4. Detected Legal Declarations & Review</span>
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -392,7 +463,12 @@ export const InspectNew: React.FC = () => {
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase">{field.fieldLabel}</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase">{field.fieldLabel}</span>
+                          <span className="text-[9px] font-bold bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-mono uppercase">
+                            Source: {field.sourceFace ? field.sourceFace.replace('_', ' ') : 'RIGHT SIDE'}
+                          </span>
+                        </div>
                         <p className="text-sm font-bold text-gray-900 font-mono mt-0.5">
                           {field.rawValue || <span className="text-rose-600 font-normal italic">Not detected</span>}
                         </p>
