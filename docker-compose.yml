@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - DATABASE_URL=postgresql://legallens:legallens_secure_pass_2026@postgres:5432/legallens_db
+      - JWT_SECRET=legallens_super_secret_jwt_key_2011_legal_metrology
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+    volumes:
+      - ./storage:/app/storage
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: legallens_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: legallens
+      POSTGRES_PASSWORD: legallens_secure_pass_2026
+      POSTGRES_DB: legallens_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
