@@ -12,6 +12,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _stats;
+  List<dynamic> _users = [];
   bool _isLoading = true;
 
   @override
@@ -21,14 +22,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
+    final user = context.read<AuthProvider>().user;
     try {
       final res = await ApiService.get('/dashboard');
       setState(() {
         _stats = res;
-        _isLoading = false;
       });
+
+      if (user != null && user.isSystemAdmin) {
+        final usersRes = await ApiService.get('/admin/users');
+        setState(() {
+          _users = usersRes['users'] ?? [];
+        });
+      }
+
+      setState(() => _isLoading = false);
     } catch (e) {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleUserStatus(String userId, String currentStatus) async {
+    final newStatus = currentStatus == 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    try {
+      await ApiService.post('/admin/users/$userId/status', {'status': newStatus});
+      _loadDashboardData();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update status: $e'), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -46,18 +68,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Icon(Icons.shield, color: Color(0xFF627D98)),
             const SizedBox(width: 8),
-            Text(
-              'LEGAL LENS MOBILE',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
+            const Text(
+              'LEGAL LENS CONSOLE',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
             ),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              context.read<AuthProvider>().logout();
-              Navigator.pushReplacementNamed(context, '/login');
+            tooltip: 'Logout',
+            onPressed: () async {
+              await context.read<AuthProvider>().logout();
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
             },
           )
         ],
@@ -71,7 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header Inspector Banner
+                    // Header Inspector/User Banner
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -87,65 +112,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Officer: ${user?.name ?? "Field Inspector"}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
+                              Expanded(
+                                child: Text(
+                                  user?.name ?? 'Authenticated Officer',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF334E68),
-                                  borderRadius: BorderRadius.circular(6),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  user?.role ?? 'INSPECTOR',
-                                  style: const TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                  user?.roleDisplayName ?? 'Officer',
+                                  style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Legal Metrology (Packaged Commodities) Field Audit',
-                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Email: ${user?.email ?? ""} | Employee #: ${user?.employeeNumber ?? "N/A"}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    // Primary CTA: Start New Inspection Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF276749), // High contrast green
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 6,
-                        ),
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/start-inspection');
-                        },
-                        icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
-                        label: const Text(
-                          '+ START NEW INSPECTION',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.black,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
+                    // Primary CTA for Inspectors
+                    if (user == null || user.isComplianceOfficer) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF276749), // High contrast green
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 6,
+                          ),
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/start-inspection');
+                          },
+                          icon: const Icon(Icons.camera_alt, color: Colors.white, size: 28),
+                          label: const Text(
+                            '+ START NEW INSPECTION',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.black,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // System Administrator User Management Panel
+                    if (user != null && user.isSystemAdmin) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'SYSTEM USER MANAGEMENT',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF102A43)),
+                          ),
+                          Chip(
+                            label: Text('${_users.length} Users', style: const TextStyle(fontSize: 10, color: Colors.white)),
+                            backgroundColor: const Color(0xFF102A43),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _users.length,
+                        itemBuilder: (context, index) {
+                          final u = _users[index];
+                          final isSuspended = u['status'] == 'SUSPENDED';
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: isSuspended ? Colors.red.shade100 : Colors.blue.shade100,
+                                child: Icon(
+                                  isSuspended ? Icons.block : Icons.person,
+                                  color: isSuspended ? Colors.red : Colors.blue.shade800,
+                                ),
+                              ),
+                              title: Text(u['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              subtitle: Text('${u['email']} • ${u['role']}', style: const TextStyle(fontSize: 11)),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isSuspended ? Colors.green : Colors.red,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                ),
+                                onPressed: () => _toggleUserStatus(u['id'], u['status']),
+                                child: Text(
+                                  isSuspended ? 'ACTIVATE' : 'SUSPEND',
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // Mobile Metrics KPI Cards Grid
+                    const Text(
+                      'INSPECTION METRICS',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF486581)),
+                    ),
+                    const SizedBox(height: 8),
                     GridView.count(
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,

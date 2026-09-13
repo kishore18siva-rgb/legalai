@@ -36,11 +36,13 @@ export const InspectNew: React.FC = () => {
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [progressStageText, setProgressStageText] = useState('');
 
-  // Scan Results for Review
+  // Scan Results for Review (Manual Inspector Entry)
   const [autoScanData, setAutoScanData] = useState<AutoScanResponse | null>(null);
   const [editedProductName, setEditedProductName] = useState('');
   const [editedBrand, setEditedBrand] = useState('');
   const [editedCategory, setEditedCategory] = useState('');
+  const [editedVariant, setEditedVariant] = useState('');
+  const [metadataConfirmed, setMetadataConfirmed] = useState(false);
   const [selectedPdpFace, setSelectedPdpFace] = useState<string>('FRONT');
   const [reviewFields, setReviewFields] = useState<ExtractedField[]>([]);
 
@@ -83,26 +85,18 @@ export const InspectNew: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setAutoScanData(null);
+    setEditedProductName('');
+    setEditedBrand('');
+    setEditedCategory('');
+    setEditedVariant('');
+    setMetadataConfirmed(false);
+    setReviewFields([]);
     setCurrentStep(2);
 
-    // Simulate Real Stage Progress
+    // Dynamic Analysis Stage Progress
     setProgressStageText('Stage 1/5: Checking image resolution & blur quality...');
-    setAnalysisProgress(20);
-
-    setTimeout(() => {
-      setProgressStageText('Stage 2/5: Running OCR text region recognition...');
-      setAnalysisProgress(40);
-    }, 600);
-
-    setTimeout(() => {
-      setProgressStageText('Stage 3/5: Extracting mandatory legal declarations...');
-      setAnalysisProgress(60);
-    }, 1200);
-
-    setTimeout(() => {
-      setProgressStageText('Stage 4/5: Classifying product category & brand...');
-      setAnalysisProgress(80);
-    }, 1800);
+    setAnalysisProgress(25);
 
     try {
       const formData = new FormData();
@@ -111,25 +105,27 @@ export const InspectNew: React.FC = () => {
         formData.append('imageTypes', item.type);
       });
 
+      setProgressStageText('Stage 3/5: Running OCR text extraction & AI analysis...');
+      setAnalysisProgress(65);
+
       const res = await api.post('/inspections/auto-scan', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      setTimeout(() => {
-        setProgressStageText('Stage 5/5: Analyzing package panel coverage...');
-        setAnalysisProgress(100);
+      const data: AutoScanResponse = res.data;
+      setProgressStageText('Stage 5/5: Analyzing package panel coverage...');
+      setAnalysisProgress(100);
 
-        const data: AutoScanResponse = res.data;
-        setAutoScanData(data);
-        setEditedProductName(data.detectedProduct.name);
-        setEditedBrand(data.detectedProduct.brand);
-        setEditedCategory(data.detectedProduct.category);
-        setSelectedPdpFace(data.pdpInfo?.pdpFace || 'FRONT');
-        setReviewFields(data.extractedFields || []);
+      setAutoScanData(data);
+      setEditedProductName('');
+      setEditedBrand('');
+      setEditedCategory('');
+      setEditedVariant('');
+      setSelectedPdpFace(data.pdpInfo?.pdpFace || 'FRONT');
+      setReviewFields(data.extractedFields || []);
 
-        setLoading(false);
-        setCurrentStep(3); // Move to Review Screen
-      }, 2400);
+      setLoading(false);
+      setCurrentStep(3); // Move to Review Screen
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error executing package auto-scan.');
       setLoading(false);
@@ -331,46 +327,68 @@ export const InspectNew: React.FC = () => {
             </div>
           )}
 
-          {/* Section A: Detected Product Metadata */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2 border-b pb-2">
-              <Package className="w-4 h-4 text-blue-600" />
-              <span>2. Auto-Detected Product Metadata</span>
-            </h2>
+          {/* Section A: Product Metadata — Inspector Entry */}
+          <div className="bg-white p-6 rounded-2xl border border-blue-200 shadow-sm space-y-5">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center space-x-2">
+                <Package className="w-4 h-4 text-blue-600" />
+                <span>2. Product Metadata — Inspector Entry</span>
+              </h2>
+              <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded font-mono">
+                Authoritative Input for Compliance Engine
+              </span>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Please enter the verified product information. The deterministic compliance engine will evaluate captured package evidence against this confirmed metadata.
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Product Name</label>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Product / Common Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={editedProductName}
-                  onChange={(e) => setEditedProductName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-900"
+                  onChange={(e) => {
+                    setEditedProductName(e.target.value);
+                    setMetadataConfirmed(false);
+                  }}
+                  placeholder="e.g. Caloe Plus Lotion / Tomato Ketchup"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Brand Name</label>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Brand Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={editedBrand}
-                  onChange={(e) => setEditedBrand(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+                  onChange={(e) => {
+                    setEditedBrand(e.target.value);
+                    setMetadataConfirmed(false);
+                  }}
+                  placeholder="e.g. Dermadew / Del Monte"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-gray-700">Auto-Detected Category</label>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-mono">
-                    {Math.round(autoScanData.detectedProduct.categoryConfidence * 100)}% Confidence
-                  </span>
-                </div>
+                <label className="block text-xs font-bold text-gray-800 mb-1">
+                  Category <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={editedCategory}
-                  onChange={(e) => setEditedCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-blue-900 bg-white"
+                  onChange={(e) => {
+                    setEditedCategory(e.target.value);
+                    setMetadataConfirmed(false);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-blue-900 bg-white focus:ring-2 focus:ring-blue-500"
                 >
+                  <option value="">-- Select Product Category --</option>
                   {categories.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -378,7 +396,93 @@ export const InspectNew: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Variant / Flavour <span className="text-gray-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editedVariant}
+                  onChange={(e) => {
+                    setEditedVariant(e.target.value);
+                    setMetadataConfirmed(false);
+                  }}
+                  placeholder="e.g. Classic Blend / Mini"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-800"
+                />
+              </div>
             </div>
+
+            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+              {metadataConfirmed ? (
+                <div className="flex items-center space-x-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Product Metadata Confirmed by Inspecting Officer</span>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-700 font-medium">
+                  ⚠ Please confirm product information before running compliance analysis.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!editedProductName.trim() || !editedBrand.trim() || !editedCategory) {
+                    setError('Product Name, Brand Name, and Category are required before confirming.');
+                    return;
+                  }
+                  setError(null);
+                  setMetadataConfirmed(true);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                  metadataConfirmed
+                    ? 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{metadataConfirmed ? 'Edit Product Information' : 'Confirm Product Information'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Debug / Transparency Section: RAW OCR TEXT FROM CURRENT IMAGE */}
+          <div className="bg-slate-900 text-slate-100 p-5 rounded-2xl border border-slate-800 shadow-md space-y-3 font-mono">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-2">
+                <Eye className="w-4 h-4 text-emerald-400" />
+                <span>RAW OCR TEXT FROM CURRENT IMAGE (PER-FACE BREAKDOWN)</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800 font-bold">
+                {autoScanData.fullOcrText ? `${autoScanData.fullOcrText.length} characters extracted` : 'OCR_LOW_CONFIDENCE'}
+              </span>
+            </div>
+
+            {autoScanData.rawOcrByFace && autoScanData.rawOcrByFace.length > 0 ? (
+              <div className="space-y-2">
+                {autoScanData.rawOcrByFace.map((f, i) => (
+                  <div key={i} className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 border-b border-slate-850 pb-1 mb-2">
+                      <span className="text-emerald-400 font-mono uppercase">[{f.face} FACE OCR]</span>
+                      <span>Confidence: {Math.round((f.confidence || 0.85) * 100)}%</span>
+                    </div>
+                    <pre className="text-xs text-slate-300 overflow-x-auto leading-relaxed whitespace-pre-wrap font-mono">
+                      {f.text || '(No text extracted from this face)'}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            ) : autoScanData.fullOcrText ? (
+              <pre className="text-xs bg-slate-950 p-3 rounded-lg overflow-x-auto text-slate-300 max-h-40 leading-relaxed whitespace-pre-wrap font-mono border border-slate-850">
+                {autoScanData.fullOcrText}
+              </pre>
+            ) : (
+              <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-lg text-amber-300 text-xs font-sans">
+                ⚠ Low confidence / empty OCR output on captured images.
+              </div>
+            )}
           </div>
 
           {/* Section B: Principal Display Panel (PDP) Determination & Override */}
@@ -511,7 +615,7 @@ export const InspectNew: React.FC = () => {
           </div>
 
           {/* Section C: Final Engine Trigger */}
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
             <button
               onClick={() => setCurrentStep(1)}
               className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900"
@@ -519,18 +623,29 @@ export const InspectNew: React.FC = () => {
               ← Back to Image Upload
             </button>
 
-            <button
-              onClick={handleConfirmAndRunEngine}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl text-sm flex items-center space-x-2 shadow-lg"
-            >
-              {loading ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <ShieldCheck className="w-5 h-5 text-blue-300" />
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              {!metadataConfirmed && (
+                <span className="text-xs text-amber-700 font-semibold bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                  ⚠ Confirm product metadata above to enable rule engine
+                </span>
               )}
-              <span>Confirm & Run Deterministic Legal Metrology Engine</span>
-            </button>
+              <button
+                onClick={handleConfirmAndRunEngine}
+                disabled={loading || !metadataConfirmed}
+                className={`font-bold px-6 py-3 rounded-xl text-sm flex items-center space-x-2 shadow-lg transition ${
+                  metadataConfirmed && !loading
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                }`}
+              >
+                {loading ? (
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-5 h-5 text-blue-300" />
+                )}
+                <span>Confirm & Run Deterministic Legal Metrology Engine</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -10,28 +10,28 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'inspector@legallens.gov.in');
-  final _passwordController = TextEditingController(text: 'Inspector@123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter both email and password.');
+      return;
+    }
+
     setState(() => _errorMessage = null);
     try {
-      final success = await context.read<AuthProvider>().login(
-            _emailController.text.trim(),
-            _passwordController.text.trim(),
-          );
+      final success = await context.read<AuthProvider>().login(email, password);
       if (success && mounted) {
         Navigator.pushReplacementNamed(context, '/dashboard');
       }
     } catch (e) {
       setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
     }
-  }
-
-  void _fillDemo(String email, String pass) {
-    _emailController.text = email;
-    _passwordController.text = pass;
   }
 
   @override
@@ -77,18 +77,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Packaged Commodities Field Inspector Console',
+                      'LEGAL METROLOGY (PACKAGED COMMODITIES) COMPLIANCE\nINSPECTION SYSTEM',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF486581),
+                        height: 1.3,
                       ),
                     ),
                     const SizedBox(height: 24),
                     if (_errorMessage != null)
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFEEEE),
@@ -97,14 +99,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: Text(
                           _errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ),
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
-                        labelText: 'OFFICIAL EMAIL',
+                        labelText: 'OFFICIAL EMAIL ADDRESS',
                         prefixIcon: const Icon(Icons.email_outlined),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -135,37 +138,36 @@ class _LoginScreenState extends State<LoginScreen> {
                                 height: 20,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
-                            : const Icon(Icons.login, color: Colors.white),
+                            : const Icon(Icons.arrow_forward, color: Colors.white),
                         label: Text(
-                          authProvider.isLoading ? 'Authenticating...' : 'SIGN IN TO MOBILE CONSOLE',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                          authProvider.isLoading ? 'Authenticating...' : 'Sign In to Inspection Console →',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
                         ),
                       ),
                     ),
                     const SizedBox(height: 24),
                     const Divider(),
+                    const SizedBox(height: 12),
                     const Text(
-                      'QUICK DEMO ACCESSS',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                      "Don't have an inspector account?",
+                      style: TextStyle(fontSize: 12, color: Color(0xFF627D98)),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        OutlinedButton(
-                          onPressed: () => _fillDemo('inspector@legallens.gov.in', 'Inspector@123'),
-                          child: const Text('Inspector', style: TextStyle(fontSize: 11)),
-                        ),
-                        OutlinedButton(
-                          onPressed: () => _fillDemo('reviewer@legallens.gov.in', 'Admin@123456'),
-                          child: const Text('Reviewer', style: TextStyle(fontSize: 11)),
-                        ),
-                        OutlinedButton(
-                          onPressed: () => _fillDemo('admin@legallens.gov.in', 'Admin@123456'),
-                          child: const Text('Admin', style: TextStyle(fontSize: 11)),
-                        ),
-                      ],
-                    )
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF102A43), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/register-inspector');
+                      },
+                      icon: const Icon(Icons.person_add_alt_1, color: Color(0xFF102A43), size: 18),
+                      label: const Text(
+                        'Create New Inspector Account',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF102A43), fontSize: 13),
+                      ),
+                    ),
                   ],
                 ),
               ),

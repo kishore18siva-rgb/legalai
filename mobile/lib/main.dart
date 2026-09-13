@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/inspection_provider.dart';
 import 'screens/login_screen.dart';
+import 'screens/register_inspector_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/start_inspection_screen.dart';
 import 'screens/camera_capture_screen.dart';
@@ -41,6 +42,7 @@ class LegalLensApp extends StatelessWidget {
         initialRoute: '/login',
         routes: {
           '/login': (context) => const LoginScreen(),
+          '/register-inspector': (context) => const RegisterInspectorScreen(),
           '/dashboard': (context) => const DashboardScreen(),
           '/start-inspection': (context) => const StartInspectionScreen(),
           '/camera-capture': (context) => const CameraCaptureScreen(),

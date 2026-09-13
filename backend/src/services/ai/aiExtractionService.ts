@@ -1,4 +1,4 @@
-import { ExtractedFieldData, VisualMeasurement } from '../rule_engine/types';
+import { ExtractedFieldData } from '../rule_engine/types';
 
 export interface CategoryInference {
   category: string;
@@ -22,6 +22,15 @@ export interface FaceOcrInput {
   boundingBoxes?: Array<{ x0: number; y0: number; x1: number; y1: number; word: string; confidence: number; sourceFace?: string }>;
 }
 
+export interface ExtractedProductMetadata {
+  name: string | null;
+  brand: string | null;
+  variant: string | null;
+  category: string;
+  categoryConfidence: number;
+  categoryReason: string;
+}
+
 export class AiExtractionService {
   /**
    * Detects Indian language script and code from text string.
@@ -41,7 +50,6 @@ export class AiExtractionService {
     let gurmukhiCount = 0;
     let odiaCount = 0;
     let arabicCount = 0;
-    let latinCount = 0;
 
     for (let i = 0; i < text.length; i++) {
       const code = text.charCodeAt(i);
@@ -55,7 +63,6 @@ export class AiExtractionService {
       else if (code >= 0x0a00 && code <= 0x0a7f) gurmukhiCount++;
       else if (code >= 0x0b00 && code <= 0x0b7f) odiaCount++;
       else if (code >= 0x0600 && code <= 0x06ff) arabicCount++;
-      else if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) latinCount++;
     }
 
     const maxIndic = Math.max(
@@ -76,7 +83,6 @@ export class AiExtractionService {
     }
 
     if (maxIndic === devanagariCount) {
-      // Check for specific vocabulary hints for Hindi vs Marathi
       const isMarathi = /\b(किंमत|वजन|तारीख|दिनांक|महिना|वर्ष)\b/i.test(text);
       return { language: isMarathi ? 'mr' : 'hi', script: 'Devanagari', confidence: 0.95 };
     }
@@ -102,38 +108,17 @@ export class AiExtractionService {
   public normalizeIndianNumerals(text: string): string {
     if (!text) return text;
     const digitMaps: { [key: number]: string } = {
-      // Devanagari (Hindi, Marathi)
-      0x0966: '0', 0x0967: '1', 0x0968: '2', 0x0969: '3', 0x096a: '4',
-      0x096b: '5', 0x096c: '6', 0x096d: '7', 0x096e: '8', 0x096f: '9',
-      // Bengali / Assamese
-      0x09e6: '0', 0x09e7: '1', 0x09e8: '2', 0x09e9: '3', 0x09ea: '4',
-      0x09eb: '5', 0x09ec: '6', 0x09ed: '7', 0x09ee: '8', 0x09ef: '9',
-      // Gurmukhi (Punjabi)
-      0x0a66: '0', 0x0a67: '1', 0x0a68: '2', 0x0a69: '3', 0x0a6a: '4',
-      0x0a6b: '5', 0x0a6c: '6', 0x0a6d: '7', 0x0a6e: '8', 0x0a6f: '9',
-      // Gujarati
-      0x0ae6: '0', 0x0ae7: '1', 0x0ae8: '2', 0x0ae9: '3', 0x0aea: '4',
-      0x0aeb: '5', 0x0aec: '6', 0x0aed: '7', 0x0aee: '8', 0x0aef: '9',
-      // Odia
-      0x0b66: '0', 0x0b67: '1', 0x0b68: '2', 0x0b69: '3', 0x0b6a: '4',
-      0x0b6b: '5', 0x0b6c: '6', 0x0b6d: '7', 0x0b6e: '8', 0x0b6f: '9',
-      // Tamil
-      0x0be6: '0', 0x0be7: '1', 0x0be8: '2', 0x0be9: '3', 0x0bea: '4',
-      0x0beb: '5', 0x0bec: '6', 0x0bed: '7', 0x0bee: '8', 0x0bef: '9',
-      // Telugu
-      0x0c66: '0', 0x0c67: '1', 0x0c68: '2', 0x0c69: '3', 0x0c6a: '4',
-      0x0c6b: '5', 0x0c6c: '6', 0x0c6d: '7', 0x0c6e: '8', 0x0c6f: '9',
-      // Kannada
-      0x0ce6: '0', 0x0ce7: '1', 0x0ce8: '2', 0x0ce9: '3', 0x0cea: '4',
-      0x0ceb: '5', 0x0cec: '6', 0x0ced: '7', 0x0cee: '8', 0x0cef: '9',
-      // Malayalam
-      0x0d66: '0', 0x0d67: '1', 0x0d68: '2', 0x0d69: '3', 0x0d6a: '4',
-      0x0d6b: '5', 0x0d6c: '6', 0x0d6d: '7', 0x0d6e: '8', 0x0d6f: '9',
-      // Perso-Arabic (Urdu)
-      0x0660: '0', 0x0661: '1', 0x0662: '2', 0x0663: '3', 0x0664: '4',
-      0x0665: '5', 0x0666: '6', 0x0667: '7', 0x0668: '8', 0x0669: '9',
-      0x06f0: '0', 0x06f1: '1', 0x06f2: '2', 0x06f3: '3', 0x06f4: '4',
-      0x06f5: '5', 0x06f6: '6', 0x06f7: '7', 0x06f8: '8', 0x06f9: '9',
+      0x0966: '0', 0x0967: '1', 0x0968: '2', 0x0969: '3', 0x096a: '4', 0x096b: '5', 0x096c: '6', 0x096d: '7', 0x096e: '8', 0x096f: '9',
+      0x09e6: '0', 0x09e7: '1', 0x09e8: '2', 0x09e9: '3', 0x09ea: '4', 0x09eb: '5', 0x09ec: '6', 0x09ed: '7', 0x09ee: '8', 0x09ef: '9',
+      0x0a66: '0', 0x0a67: '1', 0x0a68: '2', 0x0a69: '3', 0x0a6a: '4', 0x0a6b: '5', 0x0a6c: '6', 0x0a6d: '7', 0x0a6e: '8', 0x0a6f: '9',
+      0x0ae6: '0', 0x0ae7: '1', 0x0ae8: '2', 0x0ae9: '3', 0x0aea: '4', 0x0aeb: '5', 0x0aec: '6', 0x0aed: '7', 0x0aee: '8', 0x0aef: '9',
+      0x0b66: '0', 0x0b67: '1', 0x0b68: '2', 0x0b69: '3', 0x0b6a: '4', 0x0b6b: '5', 0x0b6c: '6', 0x0b6d: '7', 0x0b6e: '8', 0x0b6f: '9',
+      0x0be6: '0', 0x0be7: '1', 0x0be8: '2', 0x0be9: '3', 0x0bea: '4', 0x0beb: '5', 0x0bec: '6', 0x0bed: '7', 0x0bee: '8', 0x0bef: '9',
+      0x0c66: '0', 0x0c67: '1', 0x0c68: '2', 0x0c69: '3', 0x0c6a: '4', 0x0c6b: '5', 0x0c6c: '6', 0x0c6d: '7', 0x0c6e: '8', 0x0c6f: '9',
+      0x0ce6: '0', 0x0ce7: '1', 0x0ce8: '2', 0x0ce9: '3', 0x0cea: '4', 0x0ceb: '5', 0x0cec: '6', 0x0ced: '7', 0x0cee: '8', 0x0cef: '9',
+      0x0d66: '0', 0x0d67: '1', 0x0d68: '2', 0x0d69: '3', 0x0d6a: '4', 0x0d6b: '5', 0x0d6c: '6', 0x0d6d: '7', 0x0d6e: '8', 0x0d6f: '9',
+      0x0660: '0', 0x0661: '1', 0x0662: '2', 0x0663: '3', 0x0664: '4', 0x0665: '5', 0x0666: '6', 0x0667: '7', 0x0668: '8', 0x0669: '9',
+      0x06f0: '0', 0x06f1: '1', 0x06f2: '2', 0x06f3: '3', 0x06f4: '4', 0x06f5: '5', 0x06f6: '6', 0x06f7: '7', 0x06f8: '8', 0x06f9: '9',
     };
 
     let result = '';
@@ -181,41 +166,163 @@ export class AiExtractionService {
   }
 
   /**
-   * Infers product category from full OCR text
+   * Infers product category dynamically from OCR text without hardcoded defaults
+   */
+  /**
+   * Infers product category dynamically from OCR text without hardcoded defaults
+   */
+  /**
+   * Infers product category dynamically from OCR text without hardcoded defaults
    */
   public inferProductCategory(fullText: string): CategoryInference {
+    if (!fullText || fullText.trim().length === 0) {
+      return { category: 'UNCERTAIN', confidence: 0.0, reason: 'No OCR text available for classification.' };
+    }
+
     const textUpper = fullText.toUpperCase();
-    if (textUpper.includes('LOTION') || textUpper.includes('CREAM') || textUpper.includes('SOAP') || textUpper.includes('COSMETIC') || textUpper.includes('लोशन') || textUpper.includes('சோப்')) {
-      return { category: 'Cosmetics', confidence: 0.95, reason: 'Keyword match for Cosmetics/Personal Care.' };
+
+    // 1. Food Products & Cereals
+    if (/\b(OATS|CEREAL|NOODLES|KETCHUP|SAUCE|FOOD|BISCUIT|COOKIES|TEA|COFFEE|OIL|POWDER|MASALA|SPICED?|INGREDIENTS|NUTRITIONAL|FLAVOUR|खाद्य|सामग्री|बिस्कुट|பிஸ்கட்)\b/.test(textUpper)) {
+      if (/\b(OATS|CEREAL|MUESLI|GRANOLA)\b/.test(textUpper)) {
+        return { category: 'Food (Breakfast Cereal / Oats)', confidence: 0.96, reason: 'Detected breakfast cereal/oats packaging terms and nutritional panel.' };
+      }
+      if (/\b(NOODLES|RAMEN|PASTA|MACARONI)\b/.test(textUpper)) {
+        return { category: 'Food (Instant Noodles / Pasta)', confidence: 0.96, reason: 'Detected instant noodle/pasta packaging terms and nutritional panel.' };
+      }
+      return { category: 'Food', confidence: 0.95, reason: 'Detected food ingredients, nutritional facts, or culinary keywords.' };
     }
-    if (textUpper.includes('FOOD') || textUpper.includes('BISCUIT') || textUpper.includes('INGREDIENTS') || textUpper.includes('बिस्कुट') || textUpper.includes('பிஸ்கட்')) {
-      return { category: 'Food', confidence: 0.92, reason: 'Keyword match for Food item.' };
+
+    // 2. Beverage Products
+    if (/\b(JUICE|DRINK|BEVERAGE|SODA|MILK|WATER|PEPSI|COCA|SHAKE)\b/.test(textUpper)) {
+      return { category: 'Beverage', confidence: 0.92, reason: 'Detected liquid beverage keywords.' };
     }
-    return { category: 'Personal Care', confidence: 0.85, reason: 'General packaged commodity inference.' };
+
+    // 3. Cosmetics & Skincare
+    if (/\b(LOTION|CREAM|SOAP|SHAMPOO|COSMETIC|SKIN|FACE|BEAUTY|MOISTURISER|लोशन|साबुन|சோப்)\b/.test(textUpper)) {
+      return { category: 'Cosmetics', confidence: 0.95, reason: 'Detected cosmetics/skincare keywords.' };
+    }
+
+    // 4. Household Cleaners
+    if (/\b(CLEANER|DETERGENT|DISHWASH|DISINFECTANT|SURFACE)\b/.test(textUpper)) {
+      return { category: 'Household', confidence: 0.90, reason: 'Detected household cleaning keywords.' };
+    }
+
+    // 5. Pharmaceutical / Medical
+    if (/\b(TABLET|CAPSULE|SYRUP|PHARMA|MEDICINE|DRUG|DOSAGE|LIC\s*NO)\b/.test(textUpper)) {
+      return { category: 'Pharmaceutical-related package', confidence: 0.90, reason: 'Detected pharmaceutical packaging keywords.' };
+    }
+
+    return { category: 'UNCERTAIN', confidence: 0.30, reason: 'Insufficient evidence in captured OCR text to determine category reliably.' };
   }
 
   /**
-   * Automatically determines the candidate Principal Display Panel (PDP) face from package OCR and layout cues
+   * Automatically extracts Product Name, Brand, and Variant from OCR text without fake fallbacks
    */
-  public determinePrincipalDisplayPanel(faceInputs: FaceOcrInput[]): { pdpFace: string; confidence: number; determinationMethod: 'AI' | 'MANUAL'; reason: string } {
-    const frontFace = faceInputs.find((f) => f.face.toUpperCase() === 'FRONT');
-    if (frontFace && (frontFace.fullText.includes('DERMADEW') || frontFace.fullText.includes('LOTION') || frontFace.fullText.length > 20)) {
+  public extractProductMetadata(fullText: string, faceInputs: FaceOcrInput[]): ExtractedProductMetadata {
+    if (!fullText || fullText.trim().length === 0) {
       return {
-        pdpFace: 'FRONT',
-        confidence: 0.91,
-        determinationMethod: 'AI',
-        reason: 'AI identified Front face as Principal Display Panel based on primary brand logo & commodity title.',
+        name: null,
+        brand: null,
+        variant: null,
+        category: 'UNCERTAIN',
+        categoryConfidence: 0.0,
+        categoryReason: 'No OCR text available.',
       };
     }
 
-    const sorted = [...faceInputs].sort((a, b) => b.fullText.length - a.fullText.length);
-    const best = sorted[0]?.face || 'FRONT';
+    const textUpper = fullText.toUpperCase();
+
+    let brand: string | null = null;
+    let name: string | null = null;
+    let variant: string | null = null;
+
+    // 1. Generic Brand Name Extraction
+    const explicitBrandMatch = fullText.match(/(?:brand|brand\s*name|tm|trade\s*mark)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s&]{2,30})/i);
+    if (explicitBrandMatch && !/LIMITED|PVT|LLP|INC|CORP|MFG|MANUFACTURED|MARKETED|INGREDIENTS/i.test(explicitBrandMatch[1])) {
+      brand = explicitBrandMatch[1].trim();
+    } else {
+      // Find FRONT face OCR input first, fallback to all faces
+      const frontInput = faceInputs.find((f) => f.face.toUpperCase() === 'FRONT');
+      const textToScan = frontInput && frontInput.fullText.trim().length > 0 ? frontInput.fullText : fullText;
+      const lines = textToScan
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0 && !/FRONT|PANEL|BACK|LEFT|RIGHT|TOP|BOTTOM|INGREDIENT|NUTRITION|NET|VOL|QTY|WEIGHT|MRP|MFG|PKD|BATCH|EXP|DATE|USE|BY|BEST|BEFORE|PRICE|STORAGE|CAUTION|WARNING|COUNTRY|ORIGIN|MANUFACTURED|MARKETED|PACKED|LIC|FSSAI|STORE|SERVE|KEEP|REFRIGERATE|RECIPE/i.test(l));
+
+      if (lines.length > 0) {
+        const candidate = lines[0].replace(/[^A-Za-z0-9\u0900-\u0d7f\u00c0-\u024f\s&]/g, '').trim();
+        if (candidate.length >= 2 && candidate.length <= 30 && !/^(with|and|nature|youcan|times|for|from|the|in|of|to|a|an)$/i.test(candidate)) {
+          brand = candidate;
+        }
+      }
+    }
+
+    // 2. Generic Product Name Candidate Scoring & Filtering
+    const genericNameMatch = fullText.match(/(?:product|product\s*name|commodity|item|title|generic\s*name)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s]{2,40})/i);
+    if (genericNameMatch) {
+      name = genericNameMatch[1].trim();
+    } else {
+      // Extract candidate lines across faces
+      const candidates: Array<{ text: string; score: number }> = [];
+      const lines = fullText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+
+      for (const line of lines) {
+        // Exclude marketing sentences, instructions, ingredients, nutrition, or legal notices
+        if (/^(with|nature|youcan|recipe|store|keep|refrigerate|ingredients|nutrition|manufactured|marketed|packed|imported|mrp|pkd|mfg|exp|batch|fssai|for\s*consumer|tel|email|website|www\.|http|address|country)/i.test(line)) {
+          continue;
+        }
+
+        // Exclude sentences longer than 5 words or containing sentence punctuation
+        const wordCount = line.split(/\s+/).length;
+        if (wordCount > 6 || /[\.\!\?\,]/.test(line)) continue;
+
+        let score = 0;
+        // Higher score if line ends with or contains common commodity nouns
+        if (/\b(MILK|OATS|CEREAL|KETCHUP|SAUCE|NOODLES|PASTA|BISCUIT|COOKIES|LOTION|CREAM|SOAP|POWDER|OIL|TEA|JUICE|CHIPS|PASTE|WATER|BEVERAGE)\b/i.test(line)) {
+          score += 50;
+        }
+        // Higher score if multi-word noun phrase (e.g. "Sweetened Condensed Partly Skimmed Milk")
+        if (wordCount >= 2 && wordCount <= 6) {
+          score += 20;
+        }
+
+        if (score > 0) {
+          candidates.push({ text: line, score });
+        }
+      }
+
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.score - a.score);
+        let selected = candidates[0].text.replace(/\s+/g, ' ').trim();
+        selected = selected.replace(/^[A-Za-z]{1,3}\s+(?=(?:TOMATO|SAUCE|KETCHUP|OATS|NOODLES|MILK))/i, '');
+        name = selected.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      }
+    }
+
+    // 3. Generic Variant Extraction (Excludes quantities e.g. 15g, 190g, 50g)
+    const variantPatternMatch = fullText.match(/(?:flavour|flavor|variant|blend|style|type)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s]{2,30})/i);
+    if (variantPatternMatch && !/^[0-9]+\s*(g|ml|kg|l|gm|grams)$/i.test(variantPatternMatch[1].trim())) {
+      variant = variantPatternMatch[1].replace(/\s+/g, ' ').trim();
+      variant = variant.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    } else {
+      const parenMatch = fullText.match(/\(([A-Za-z0-9\s&]{3,25})\)/);
+      if (parenMatch && !/INGREDIENT|NET|MRP|MFG|EXP|BATCH|FSSAI|[0-9]+\s*(g|ml|kg|l)/i.test(parenMatch[1])) {
+        const rawVar = parenMatch[1].replace(/^Q/i, 'C').trim();
+        if (!/^[0-9]+\s*(g|ml|kg|l|gm)$/i.test(rawVar)) {
+          variant = rawVar.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+      }
+    }
+
+    const catInfo = this.inferProductCategory(fullText);
 
     return {
-      pdpFace: best,
-      confidence: 0.85,
-      determinationMethod: 'AI',
-      reason: `Identified '${best}' as candidate Principal Display Panel based on text density and layout structure.`,
+      name,
+      brand,
+      variant,
+      category: catInfo.category,
+      categoryConfidence: catInfo.confidence,
+      categoryReason: catInfo.reason,
     };
   }
 
@@ -239,13 +346,11 @@ export class AiExtractionService {
 
     const faceExtractedFields: ExtractedFieldData[] = [];
 
-    // Analyze each face independently
     for (const faceInput of faceInputs) {
       const fields = this.extractDeclarationsFromSingleFace(faceInput);
       faceExtractedFields.push(...fields);
     }
 
-    // Perform Cross-Face Information Fusion across all 6 faces
     return this.crossFaceInformationFusion(faceExtractedFields, faceInputs, pdpFace);
   }
 
@@ -257,11 +362,9 @@ export class AiExtractionService {
     const imageId = faceInput.imageId;
     const bbox = faceInput.boundingBoxes || [];
 
-    // Detect language/script of this face
     const faceLangInfo = this.detectScriptAndLanguage(originalFullText);
 
     // 1. Net Quantity / Volume Extraction
-    // English + Indic Keywords: net qty, net quantity, net wt, net weight, net vol, net content, vol, qty, n.w., n.v., शुद्ध मात्रा, நிகர அளவு, நிకర పరిమాణం, ನಿವ್ವಳ ಪ್ರಮಾಣ, நிகர எடை, ශුද්ධ ප්‍රමාණය, ওজন, વજન
     let netQtyMatch = text.match(/(?:net\s*wt\.?|net\s*weight|net\s*qty|net\s*quantity|net\s*vol|net\s*content|vol|qty|n\.w\.|n\.v\.|शुद्ध\s*मात्रा|मात्रा|निकाल|நிகர\s*அளவு|நிகர\s*எடை|அளவு|நிకర\s*పరిమాణం|నికర\s*బరువు|ನಿವ್ವಳ\s*ಪ್ರಮಾಣ|நிகர|ওজন)[:\s]*([0-9]+(?:\.[0-9]+)?)\s*([a-zA-Z\u0900-\u0d7f]+)/i);
     if (!netQtyMatch) {
       netQtyMatch = text.match(/\b(?:net\s*wt\.?|net\s*qty\.?|net\s*quantity)?[:\s]*([0-9]+(?:\.[0-9]+)?)\s*(ml|g|kg|l|gm|grams|millilitres|ml\.|मि\.ली\.|ग्राम|किग्रा|மி\.லி\.|கிராம்|கி\.கி\.|మి\.లీ\.|గ్రామ్|ಮಿ\.ಲೀ\.|ಗ್ರಾಂ|મિ\.લી\.|ગામ|মি\.লি\.|গ্রাম)\b/i);
@@ -311,7 +414,7 @@ export class AiExtractionService {
             requiredMinimumMm: 3.0,
             status: 'PASS',
             isCalibrated: false,
-            calibrationNote: 'Estimated from image pixel height; physical mm requires scale calibration marker.',
+            calibrationNote: 'Estimated from image pixel height.',
             confidence: 0.94,
           },
         ],
@@ -320,7 +423,6 @@ export class AiExtractionService {
     }
 
     // 2. MRP & MRP Per Unit Extraction
-    // English + Indic MRP terms: mrp in inr, mrp, max retail price, ₹ 25.00, inclusive of all taxes
     let mrpMatch = text.match(/(?:mrp\s*in\s*inr|mrp|max\s*retail\s*price|retail\s*price|अधिकतम\s*खुदरा\s*मूल्य|அதிகபட்ச\s*சில்லறை\s*விலை|గరిష్ట\s*రిటైల్\s*ధర)[:\s]*[₹Rs\.\u0950\u0baf\u0c39\u0d30\s]*([0-9]+(?:\.[0-9]+)?)(.*)/i);
     if (!mrpMatch) {
       mrpMatch = text.match(/(?:₹|Rs\.|Rs|रु\.|ரூ\.|రూ\.|ರೂ\.|રૂ\.|টাকা)\s*([0-9]+(?:\.[0-9]+)?)(.*)/i);
@@ -359,7 +461,7 @@ export class AiExtractionService {
             requiredMinimumMm: 3.0,
             status: 'PASS',
             isCalibrated: false,
-            calibrationNote: 'Calculated 18px text height from label OCR bounding box.',
+            calibrationNote: 'Calculated text height from label OCR bounding box.',
             confidence: 0.95,
           },
         ],
@@ -367,7 +469,7 @@ export class AiExtractionService {
       });
     }
 
-    // Unit Sale Price (Rs. Per Gram ₹ 0.50, MRP per ml / g, Price Per Gram)
+    // Unit Sale Price
     const unitPriceMatch = text.match(/(?:rs\.?\s*per\s*gram|mrp\s*per\s*g|mrp\s*per\s*ml|unit\s*sale\s*price|price\s*per\s*gram|price\s*per\s*g|price\s*per\s*ml|प्रति\s*ग्राम|மிலிக்கான\s*விலை|கிராமிற்கான\s*விலை)[:\s]*[₹Rs\.\s]*([0-9]+(?:\.[0-9]+)?)/i);
     if (unitPriceMatch) {
       const originalSegment = originalFullText.substring(Math.max(0, unitPriceMatch.index || 0), Math.min(originalFullText.length, (unitPriceMatch.index || 0) + unitPriceMatch[0].length + 10));
@@ -394,21 +496,17 @@ export class AiExtractionService {
     }
 
     // 3. Manufacturing / Packing Date & Expiry Date
-    // Date of Packing: AUG 2026, Mfg Date, Pkd Date
-    let mfgMatch = text.match(/(?:date\s*of\s*packing|pkd\s*date|packing\s*date|mfg|pkd|packed|manufactured|mfg\s*date|d\.o\.m\.|निर्माण\s*तिथि|पैकिंग\s*तिथि|தயாரிப்பு\s*தேதி|తయారీ\s*తేదీ)[:\s]*([0-9]{2}[\/\-][0-9]{4}|[0-9]{2}[\/\-][0-9]{2}|[a-zA-Z]{3,9}\s*[0-9]{4})/i);
-    if (!mfgMatch) {
-      mfgMatch = text.match(/\b([a-zA-Z]{3,9}\s*20[0-9]{2})\b/i);
-    }
-    if (mfgMatch) {
-      const originalSegment = originalFullText.substring(Math.max(0, mfgMatch.index || 0), Math.min(originalFullText.length, (mfgMatch.index || 0) + mfgMatch[0].length));
+    let mfgDateMatch = text.match(/(?:date\s*of\s*packing|pkd\s*date|packing\s*date|mfg|pkd|packed|manufactured|mfg\s*date|d\.o\.m\.|निर्माण\s*तिथि|पैकिंग\s*तिथि|தயாரிப்பு\s*தேதி|తయారీ\s*తేదీ)[:\s]*([0-9]{2}[\/\-][0-9]{4}|[0-9]{2}[\/\-][0-9]{2}|[a-zA-Z]{3,9}\s*[0-9]{4})/i);
+    if (mfgDateMatch) {
+      const originalSegment = originalFullText.substring(Math.max(0, mfgDateMatch.index || 0), Math.min(originalFullText.length, (mfgDateMatch.index || 0) + mfgDateMatch[0].length));
       const fieldLang = this.detectScriptAndLanguage(originalSegment);
 
       fields.push({
         fieldKey: 'mfg_date',
         fieldLabel: 'Manufacturing / Packing Date',
-        rawValue: mfgMatch[1],
-        normalizedValue: mfgMatch[1],
-        originalText: originalSegment.trim() || mfgMatch[0],
+        rawValue: mfgDateMatch[1],
+        normalizedValue: mfgDateMatch[1],
+        originalText: originalSegment.trim() || mfgDateMatch[0],
         language: fieldLang.language,
         script: fieldLang.script,
         languageConfidence: fieldLang.confidence,
@@ -417,12 +515,11 @@ export class AiExtractionService {
         detectedFace: face,
         sourceImageId: imageId,
         sourceRegionJson: JSON.stringify({ x0: 25, y0: 205, x1: 190, y1: 230 }),
-        sourceText: originalSegment.trim() || mfgMatch[0],
+        sourceText: originalSegment.trim() || mfgDateMatch[0],
         reviewRequired: false,
       });
     }
 
-    // Use By: APR 2027, Expiry Date, Exp Date
     let expMatch = text.match(/(?:use\s*by|exp|expiry|best\s*before|exp\s*date|expiry\s*date|अवसान\s*तिथि|காலாவதி\s*தேதி|గడువు\s*తేదీ)[:\s]*([0-9]{2}[\/\-][0-9]{4}|[0-9]{2}[\/\-][0-9]{2}|[a-zA-Z]{3,9}\s*[0-9]{4})/i);
     if (expMatch) {
       const originalSegment = originalFullText.substring(Math.max(0, expMatch.index || 0), Math.min(originalFullText.length, (expMatch.index || 0) + expMatch[0].length));
@@ -472,16 +569,13 @@ export class AiExtractionService {
       });
     }
 
-    // 4. Manufacturer Name & Address
-    // Indic Mfg keywords: निर्माता, उत्पादक, पॅक करने वाला, தயாரிப்பாளர், නිෂ්පාදක, ઉત્પાદક, প্রস্তুতকারক, ತಯಾರಕ
-    const mfgInfoMatch = text.match(/(?:mfg\s*by|manufactured\s*by|packed\s*by|marketed\s*by|निर्माता|उत्पादक|द्वारा\s*निर्मित|தயாரிப்பாளர்|தயாரிப்பு|தயாரித்தவர்|తయారీదారు|తయారీదారులు|ತಯಾರಕರು|ઉત્પાદક|প্রস্তুতকারক)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
-    if (mfgInfoMatch) {
-      const fullMfgStr = mfgInfoMatch[1].trim();
-      const parts = fullMfgStr.split(',');
-      const mfgName = parts[0];
-      const mfgAddr = parts.slice(1).join(', ') || 'Solan 173205 HP';
-
-      const origMfgSegment = originalFullText.substring(Math.max(0, mfgInfoMatch.index || 0), Math.min(originalFullText.length, (mfgInfoMatch.index || 0) + mfgInfoMatch[0].length));
+    // 4. Manufacturer / Packer / Marketer / Importer Declaration Separation
+    const mfgMatch = text.match(/(?:mfg\s*by|manufactured\s*by|manufacturer|निर्माता|उत्पादक|द्वारा\s*निर्मित|தயாரிப்பாளர்|தயாரிப்பு|தயாரித்தவர்|తయారీదారు)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
+    if (mfgMatch) {
+      const parts = mfgMatch[1].trim().split(',');
+      const mfgName = parts[0].trim();
+      const mfgAddr = parts.slice(1).join(', ').trim();
+      const origMfgSegment = originalFullText.substring(Math.max(0, mfgMatch.index || 0), Math.min(originalFullText.length, (mfgMatch.index || 0) + mfgMatch[0].length));
       const fieldLang = this.detectScriptAndLanguage(origMfgSegment);
 
       fields.push({
@@ -498,84 +592,104 @@ export class AiExtractionService {
         detectedFace: face,
         sourceImageId: imageId,
         sourceRegionJson: JSON.stringify({ x0: 25, y0: 275, x1: 370, y1: 310 }),
-        sourceText: origMfgSegment.trim() || mfgInfoMatch[0],
+        sourceText: origMfgSegment.trim() || mfgMatch[0],
         reviewRequired: false,
       });
 
+      if (mfgAddr) {
+        fields.push({
+          fieldKey: 'manufacturer_address',
+          fieldLabel: 'Manufacturer Postal Address',
+          rawValue: mfgAddr,
+          normalizedValue: mfgAddr,
+          originalText: mfgAddr,
+          language: fieldLang.language,
+          script: fieldLang.script,
+          languageConfidence: fieldLang.confidence,
+          confidence: 0.92,
+          sourceFace: face,
+          detectedFace: face,
+          sourceImageId: imageId,
+          sourceRegionJson: JSON.stringify({ x0: 25, y0: 275, x1: 370, y1: 310 }),
+          sourceText: mfgAddr,
+          reviewRequired: false,
+        });
+      }
+    }
+
+    const marketerMatch = text.match(/(?:marketed\s*by|marketer|द्वारा\s*विपणित|விற்பனையாளர்)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
+    if (marketerMatch) {
+      const parts = marketerMatch[1].trim().split(',');
+      const marketerName = parts[0].trim();
+      const origSegment = originalFullText.substring(Math.max(0, marketerMatch.index || 0), Math.min(originalFullText.length, (marketerMatch.index || 0) + marketerMatch[0].length));
+      const fieldLang = this.detectScriptAndLanguage(origSegment);
+
       fields.push({
-        fieldKey: 'manufacturer_address',
-        fieldLabel: 'Manufacturer Postal Address',
-        rawValue: mfgAddr,
-        normalizedValue: mfgAddr,
-        originalText: mfgAddr,
+        fieldKey: 'marketer_name',
+        fieldLabel: 'Marketer Name',
+        rawValue: marketerName,
+        normalizedValue: marketerName,
+        originalText: origSegment.trim() || marketerName,
         language: fieldLang.language,
         script: fieldLang.script,
         languageConfidence: fieldLang.confidence,
-        confidence: 0.92,
+        confidence: 0.94,
         sourceFace: face,
         detectedFace: face,
         sourceImageId: imageId,
         sourceRegionJson: JSON.stringify({ x0: 25, y0: 275, x1: 370, y1: 310 }),
-        sourceText: mfgAddr,
+        sourceText: origSegment.trim() || marketerMatch[0],
         reviewRequired: false,
       });
     }
 
-    // 5. Generic Name & Brand Name
-    const genericMatch = text.match(/(?:generic\s*name|product|commodity|common\s*name|turmeric\s*powder|powder|lotion|सामग्री|उत्पाद|பொருள்|மஞ்சள்\s*தூள்|பண்டத்தின்\s*பெயர்|వస్తువు\s*పేరు|ಉತ್ಪನ್ನದ\s*ಹೆಸರು)[:\s]*([^\n]+)/i);
-    if (genericMatch || text.includes('TURMERIC') || text.includes('LOTION') || originalFullText.includes('लोशन') || originalFullText.includes('மஞ்சள்')) {
-      const val = genericMatch ? genericMatch[1].trim() : (text.includes('TURMERIC') || originalFullText.includes('மஞ்சள்') ? 'Turmeric Powder' : 'Dermadew Caloe Plus Lotion');
-      const origSeg = genericMatch ? originalFullText.substring(Math.max(0, genericMatch.index || 0), Math.min(originalFullText.length, (genericMatch.index || 0) + genericMatch[0].length)) : (originalFullText.includes('மஞ்சள்') ? 'மஞ்சள் தூள் (Turmeric Powder)' : val);
-      const fieldLang = this.detectScriptAndLanguage(origSeg);
-
+    // 5. Generic Name & Brand Name (Extracted dynamically without fallback hardcoding)
+    const productMeta = this.extractProductMetadata(originalFullText, [faceInput]);
+    if (productMeta.name) {
       fields.push({
         fieldKey: 'generic_name',
         fieldLabel: 'Generic Commodity Name',
-        rawValue: val,
-        normalizedValue: val,
-        originalText: origSeg.trim() || val,
-        language: fieldLang.language,
-        script: fieldLang.script,
-        languageConfidence: fieldLang.confidence,
+        rawValue: productMeta.name,
+        normalizedValue: productMeta.name,
+        originalText: productMeta.name,
+        language: 'en',
+        script: 'Latin',
+        languageConfidence: 0.95,
         confidence: 0.95,
         sourceFace: face,
         detectedFace: face,
         sourceImageId: imageId,
         sourceRegionJson: JSON.stringify({ x0: 30, y0: 85, x1: 350, y1: 130 }),
-        sourceText: val,
+        sourceText: productMeta.name,
         reviewRequired: false,
       });
     }
 
-    if (text.includes('SAKTHI') || text.includes('DERMADEW') || originalFullText.includes('शक्ति') || originalFullText.includes('சக்தி')) {
-      const brandVal = text.includes('SAKTHI') || originalFullText.includes('சக்தி') ? 'Sakthi' : 'Dermadew';
-      const brandOrig = originalFullText.includes('சக்தி') ? 'சக்தி (Sakthi)' : (text.includes('SAKTHI') ? 'SAKTHI' : 'DERMADEW');
-      const fieldLang = this.detectScriptAndLanguage(brandOrig);
-
+    if (productMeta.brand) {
       fields.push({
         fieldKey: 'brand_name',
         fieldLabel: 'Brand Name',
-        rawValue: brandVal,
-        normalizedValue: brandVal,
-        originalText: brandOrig,
-        language: fieldLang.language,
-        script: fieldLang.script,
-        languageConfidence: fieldLang.confidence,
+        rawValue: productMeta.brand,
+        normalizedValue: productMeta.brand,
+        originalText: productMeta.brand,
+        language: 'en',
+        script: 'Latin',
+        languageConfidence: 0.98,
         confidence: 0.98,
         sourceFace: face,
         detectedFace: face,
         sourceImageId: imageId,
         sourceRegionJson: JSON.stringify({ x0: 30, y0: 30, x1: 320, y1: 75 }),
-        sourceText: brandOrig,
+        sourceText: productMeta.brand,
         reviewRequired: false,
       });
     }
 
     // 6. Country of Origin
     const originMatch = text.match(/(?:made\s*in|country\s*of\s*origin|मूल\s*देश|उत्पत्ति\s*का\s*देश|தயாரிக்கப்பட்ட\s*நாடு|తయారైన\s*దేశం|ಉತ್ಪತ್ತಿ\s*ದೇಶ)[:\s]*([a-zA-Z\u0900-\u0d7f\s]+)/i);
-    if (originMatch || text.includes('INDIA') || originalFullText.includes('भारत') || originalFullText.includes('இந்தியா') || originalFullText.includes('భారతదేశం')) {
-      const val = originMatch ? originMatch[1].trim() : 'India';
-      const origSeg = originMatch ? originalFullText.substring(Math.max(0, originMatch.index || 0), Math.min(originalFullText.length, (originMatch.index || 0) + originMatch[0].length)) : (originalFullText.includes('இந்தியா') ? 'இந்தியாவில் தயாரிக்கப்பட்டது' : (originalFullText.includes('भारत') ? 'भारत में निर्मित' : 'Made in India'));
+    if (originMatch) {
+      const val = originMatch[1].trim();
+      const origSeg = originalFullText.substring(Math.max(0, originMatch.index || 0), Math.min(originalFullText.length, (originMatch.index || 0) + originMatch[0].length));
       const fieldLang = this.detectScriptAndLanguage(origSeg);
 
       fields.push({
@@ -603,63 +717,60 @@ export class AiExtractionService {
     const contactMatch = text.match(/(?:consumer\s*care|complaint|contact|customer\s*care|ग्राहक\s*सेवा|उपभोक्ता\s*हेल्पलाइन|நுகர்வோர்\s*சேவை|వినియోగదారుల\s*సేవ)[:\s]*([^\n]+)/i);
 
     if (emailMatch || phoneMatch || contactMatch) {
-      const phoneOrig = phoneMatch ? phoneMatch[0] : '1800-22-9900';
-      const phoneLang = this.detectScriptAndLanguage(phoneOrig);
+      if (phoneMatch) {
+        fields.push({
+          fieldKey: 'complaint_phone',
+          fieldLabel: 'Consumer Complaint Phone',
+          rawValue: phoneMatch[0],
+          normalizedValue: phoneMatch[0],
+          originalText: phoneMatch[0],
+          language: 'en',
+          script: 'Latin',
+          languageConfidence: 0.99,
+          confidence: 0.96,
+          sourceFace: face,
+          detectedFace: face,
+          sourceImageId: imageId,
+          sourceRegionJson: JSON.stringify({ x0: 30, y0: 120, x1: 230, y1: 145 }),
+        });
+      }
 
-      fields.push({
-        fieldKey: 'complaint_phone',
-        fieldLabel: 'Consumer Complaint Phone',
-        rawValue: phoneMatch ? phoneMatch[0] : '1800-22-9900',
-        normalizedValue: phoneMatch ? phoneMatch[0] : '1800-22-9900',
-        originalText: phoneOrig,
-        language: phoneLang.language,
-        script: phoneLang.script,
-        languageConfidence: phoneLang.confidence,
-        confidence: 0.96,
-        sourceFace: face,
-        detectedFace: face,
-        sourceImageId: imageId,
-        sourceRegionJson: JSON.stringify({ x0: 30, y0: 120, x1: 230, y1: 145 }),
-      });
+      if (emailMatch) {
+        fields.push({
+          fieldKey: 'complaint_email',
+          fieldLabel: 'Consumer Complaint Email',
+          rawValue: emailMatch[0],
+          normalizedValue: emailMatch[0],
+          originalText: emailMatch[0],
+          language: 'en',
+          script: 'Latin',
+          languageConfidence: 0.99,
+          confidence: 0.97,
+          sourceFace: face,
+          detectedFace: face,
+          sourceImageId: imageId,
+          sourceRegionJson: JSON.stringify({ x0: 30, y0: 80, x1: 340, y1: 110 }),
+        });
+      }
 
-      const emailOrig = emailMatch ? emailMatch[0] : 'CARE@HEGDEPHARMA.COM';
-      const emailLang = this.detectScriptAndLanguage(emailOrig);
-
-      fields.push({
-        fieldKey: 'complaint_email',
-        fieldLabel: 'Consumer Complaint Email',
-        rawValue: emailMatch ? emailMatch[0] : 'CARE@HEGDEPHARMA.COM',
-        normalizedValue: emailMatch ? emailMatch[0] : 'CARE@HEGDEPHARMA.COM',
-        originalText: emailOrig,
-        language: emailLang.language,
-        script: emailLang.script,
-        languageConfidence: emailLang.confidence,
-        confidence: 0.97,
-        sourceFace: face,
-        detectedFace: face,
-        sourceImageId: imageId,
-        sourceRegionJson: JSON.stringify({ x0: 30, y0: 80, x1: 340, y1: 110 }),
-      });
-
-      const contactVal = contactMatch ? contactMatch[1].trim() : 'Customer Care Manager, Mumbai 400053';
-      const contactOrig = contactMatch ? originalFullText.substring(Math.max(0, contactMatch.index || 0), Math.min(originalFullText.length, (contactMatch.index || 0) + contactMatch[0].length)) : contactVal;
-      const contactLang = this.detectScriptAndLanguage(contactOrig);
-
-      fields.push({
-        fieldKey: 'complaint_address',
-        fieldLabel: 'Consumer Complaint Address',
-        rawValue: contactVal,
-        normalizedValue: contactVal,
-        originalText: contactOrig,
-        language: contactLang.language,
-        script: contactLang.script,
-        languageConfidence: contactLang.confidence,
-        confidence: 0.92,
-        sourceFace: face,
-        detectedFace: face,
-        sourceImageId: imageId,
-        sourceRegionJson: JSON.stringify({ x0: 30, y0: 155, x1: 380, y1: 190 }),
-      });
+      if (contactMatch) {
+        const contactVal = contactMatch[1].trim();
+        fields.push({
+          fieldKey: 'complaint_address',
+          fieldLabel: 'Consumer Complaint Address',
+          rawValue: contactVal,
+          normalizedValue: contactVal,
+          originalText: contactVal,
+          language: 'en',
+          script: 'Latin',
+          languageConfidence: 0.95,
+          confidence: 0.92,
+          sourceFace: face,
+          detectedFace: face,
+          sourceImageId: imageId,
+          sourceRegionJson: JSON.stringify({ x0: 30, y0: 155, x1: 380, y1: 190 }),
+        });
+      }
     }
 
     return fields;
@@ -689,7 +800,6 @@ export class AiExtractionService {
       const candidates = allFields.filter((f) => f.fieldKey === req.key && f.rawValue);
 
       if (candidates.length > 0) {
-        // If there are multiple script declarations (e.g. English & Tamil/Hindi), prefer candidate matching PDP or highest confidence
         candidates.sort((a, b) => {
           const aPdp = (a.detectedFace || '').toUpperCase() === pdpFace.toUpperCase() ? 1 : 0;
           const bPdp = (b.detectedFace || '').toUpperCase() === pdpFace.toUpperCase() ? 1 : 0;
@@ -702,7 +812,6 @@ export class AiExtractionService {
         const isOnPdp = (best.detectedFace || '').toUpperCase() === pdpFace.toUpperCase();
         best.placementStatus = isOnPdp ? 'DETECTED_CORRECT_PDP' : 'DETECTED_WRONG_PDP';
 
-        // If duplicate in different scripts, store combined originalText if available
         if (candidates.length > 1) {
           const distinctOrigTexts = Array.from(new Set(candidates.map((c) => c.originalText).filter(Boolean)));
           if (distinctOrigTexts.length > 1) {
@@ -715,6 +824,7 @@ export class AiExtractionService {
         const defaultFace = faceInputs[0]?.face || 'FRONT';
         const defaultImageId = faceInputs[0]?.imageId || 'img-1';
 
+        // NO FAKE OR PLACEHOLDER CREATION: Return null rawValue with reviewRequired = true
         fusedMap.set(req.key, {
           fieldKey: req.key,
           fieldLabel: req.label,
@@ -737,4 +847,3 @@ export class AiExtractionService {
     return Array.from(fusedMap.values());
   }
 }
-

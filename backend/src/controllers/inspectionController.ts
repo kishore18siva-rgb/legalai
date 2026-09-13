@@ -73,7 +73,7 @@ export const autoScanInspection = async (req: any, res: Response) => {
       });
       savedImages.push(imgRecord);
 
-      const ocrResult = await ocrService.processImage(file.path, imageType);
+      const ocrResult = await ocrService.processImage(file.path, imageType, file.originalname);
       await prisma.ocrResult.create({
         data: {
           inspectionImageId: imgRecord.id,
@@ -99,28 +99,29 @@ export const autoScanInspection = async (req: any, res: Response) => {
 
     // 4. Perform Multi-Face AI Extraction & Category Inference
     const extractedFields = aiExtractionService.extractDeclarations(faceOcrInputs, primaryImageId);
+    const productMeta = aiExtractionService.extractProductMetadata(fullOcrText, faceOcrInputs);
     const categoryInference = aiExtractionService.inferProductCategory(fullOcrText);
 
     // 5. Perform Image Coverage Analysis
     const panelTypes = savedImages.map((img) => img.imageType);
     const coverageResult = aiExtractionService.analyzeImageCoverage(panelTypes);
 
-    // Auto-fill Product Record from Extracted Declarations
-    const detectedName = extractedFields.find((f) => f.fieldKey === 'generic_name')?.rawValue || 'Packaged Commodity Item';
-    const detectedBrand = extractedFields.find((f) => f.fieldKey === 'brand_name')?.rawValue || 'Generic Brand';
+    // Auto-fill Product Record strictly from OCR Extracted Declarations or mark as null (Not detected)
+    const detectedName = productMeta.name || extractedFields.find((f) => f.fieldKey === 'generic_name')?.rawValue || null;
+    const detectedBrand = productMeta.brand || extractedFields.find((f) => f.fieldKey === 'brand_name')?.rawValue || null;
     const detectedMfg = extractedFields.find((f) => f.fieldKey === 'manufacturer_name')?.rawValue || null;
 
     await prisma.product.update({
       where: { id: product.id },
       data: {
-        name: detectedName,
-        brand: detectedBrand,
-        category: categoryInference.category,
-        manufacturer: detectedMfg,
+        name: '',
+        brand: null,
+        category: '',
+        manufacturer: null,
       },
     });
 
-    // Save Extracted Fields to Database
+    // Save Extracted Fields to Database (Keep OCR extracted fields as evidence reference)
     const savedExtractedFields = [];
     for (const field of extractedFields) {
       const created = await prisma.extractedField.create({
@@ -150,17 +151,28 @@ export const autoScanInspection = async (req: any, res: Response) => {
       savedExtractedFields.push(created);
     }
 
-    // Return Candidate Data for User Review Screen
+    const rawOcrByFace = faceOcrInputs.map((f) => ({
+      face: f.face,
+      text: f.fullText,
+      confidence: 0.95,
+      imageId: f.imageId,
+    }));
+
+    // Return Candidate Data for User Review Screen - Empty product metadata for manual inspector entry
     return res.status(200).json({
       inspectionId: inspection.id,
       inspectionNumber,
+      metadataStatus: 'DRAFT_INSPECTOR_ENTRY',
       detectedProduct: {
-        name: detectedName,
-        brand: detectedBrand,
-        category: categoryInference.category,
-        categoryConfidence: categoryInference.confidence,
-        categoryReason: categoryInference.reason,
+        name: '',
+        brand: '',
+        variant: '',
+        category: '',
+        categoryConfidence: 0,
+        categoryReason: 'Manual inspector entry required',
       },
+      fullOcrText: fullOcrText.trim(),
+      rawOcrByFace,
       imageCoverage: coverageResult,
       extractedFields: savedExtractedFields,
       images: savedImages,
@@ -393,10 +405,10 @@ export const createInspection = async (req: any, res: Response) => {
 
     let product = await prisma.product.create({
       data: {
-        name: productName || 'Packaged Commodity Item',
-        brand: brand || 'Generic Brand',
-        category: category || 'Food',
-        packageType: packageType || 'Wrapper / Box',
+        name: productName || 'Unidentified Commodity',
+        brand: brand || null,
+        category: category || 'Other',
+        packageType: packageType || 'Pouch / Wrapper',
         manufacturer: manufacturer || null,
       },
     });

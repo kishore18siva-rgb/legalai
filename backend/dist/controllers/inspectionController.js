@@ -89,19 +89,20 @@ const autoScanInspection = async (req, res) => {
         const primaryImageId = savedImages[0]?.id;
         // 4. Perform Multi-Face AI Extraction & Category Inference
         const extractedFields = aiExtractionService.extractDeclarations(faceOcrInputs, primaryImageId);
+        const productMeta = aiExtractionService.extractProductMetadata(fullOcrText, faceOcrInputs);
         const categoryInference = aiExtractionService.inferProductCategory(fullOcrText);
         // 5. Perform Image Coverage Analysis
         const panelTypes = savedImages.map((img) => img.imageType);
         const coverageResult = aiExtractionService.analyzeImageCoverage(panelTypes);
-        // Auto-fill Product Record from Extracted Declarations
-        const detectedName = extractedFields.find((f) => f.fieldKey === 'generic_name')?.rawValue || 'Packaged Commodity Item';
-        const detectedBrand = extractedFields.find((f) => f.fieldKey === 'brand_name')?.rawValue || 'Generic Brand';
+        // Auto-fill Product Record strictly from OCR Extracted Declarations or mark as null (Not detected)
+        const detectedName = productMeta.name || extractedFields.find((f) => f.fieldKey === 'generic_name')?.rawValue || null;
+        const detectedBrand = productMeta.brand || extractedFields.find((f) => f.fieldKey === 'brand_name')?.rawValue || null;
         const detectedMfg = extractedFields.find((f) => f.fieldKey === 'manufacturer_name')?.rawValue || null;
         await prisma.product.update({
             where: { id: product.id },
             data: {
-                name: detectedName,
-                brand: detectedBrand,
+                name: detectedName || 'Unidentified Commodity',
+                brand: detectedBrand || null,
                 category: categoryInference.category,
                 manufacturer: detectedMfg,
             },
@@ -142,6 +143,7 @@ const autoScanInspection = async (req, res) => {
             detectedProduct: {
                 name: detectedName,
                 brand: detectedBrand,
+                variant: productMeta.variant || null,
                 category: categoryInference.category,
                 categoryConfidence: categoryInference.confidence,
                 categoryReason: categoryInference.reason,
@@ -365,10 +367,10 @@ const createInspection = async (req, res) => {
         const inspectorId = req.user.id;
         let product = await prisma.product.create({
             data: {
-                name: productName || 'Packaged Commodity Item',
-                brand: brand || 'Generic Brand',
-                category: category || 'Food',
-                packageType: packageType || 'Wrapper / Box',
+                name: productName || 'Unidentified Commodity',
+                brand: brand || null,
+                category: category || 'Other',
+                packageType: packageType || 'Pouch / Wrapper',
                 manufacturer: manufacturer || null,
             },
         });

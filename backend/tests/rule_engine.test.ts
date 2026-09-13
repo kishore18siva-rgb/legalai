@@ -30,7 +30,7 @@ describe('Deterministic Legal Rule Engine Tests', () => {
       { fieldKey: 'manufacturer_address', fieldLabel: 'Mfg Address', rawValue: 'Plot 12, MIDC Industrial Area, Pune 411018', confidence: 0.92 },
     ];
 
-    const context: InspectionContext = { isRetailPackage: true };
+    const context: InspectionContext = { isRetailPackage: true, pdpFace: 'FRONT' };
     const result = engine.evaluateSingleRule(rule, new Map(fields.map((f) => [f.fieldKey, f])), context);
 
     expect(result.result).toBe('PASS');
@@ -57,7 +57,7 @@ describe('Deterministic Legal Rule Engine Tests', () => {
       { fieldKey: 'net_quantity', fieldLabel: 'Net Quantity', rawValue: '2 lbs', unit: 'lbs', confidence: 0.95 },
     ];
 
-    const context: InspectionContext = { isRetailPackage: true };
+    const context: InspectionContext = { isRetailPackage: true, pdpFace: 'FRONT' };
     const result = engine.evaluateSingleRule(rule, new Map(fields.map((f) => [f.fieldKey, f])), context);
 
     expect(result.result).toBe('FAIL');
@@ -81,10 +81,65 @@ describe('Deterministic Legal Rule Engine Tests', () => {
     };
 
     const fields: ExtractedFieldData[] = [];
-    const context: InspectionContext = { isRetailPackage: true, netQuantityValue: 5, netQuantityUnit: 'g' };
+    const context: InspectionContext = { isRetailPackage: true, netQuantityValue: 5, netQuantityUnit: 'g', pdpFace: 'FRONT' };
     const result = engine.evaluateSingleRule(rule, new Map(), context);
 
     expect(result.result).toBe('NOT_APPLICABLE');
     expect(result.reason).toContain('Exempt under Rule 26(a)');
+  });
+
+  test('Generic Brand vs Manufacturer Role Separation Test', () => {
+    const { AiExtractionService } = require('../src/services/ai/aiExtractionService');
+    const service = new AiExtractionService();
+
+    const sampleOcrText = `FRONT PANEL:
+ACME
+CHOCOLATE BISCUITS
+
+BACK PANEL:
+Manufactured By: ACME FOODS PRIVATE LIMITED, INDUSTRIAL ZONE, MUMBAI 400001.
+NET QUANTITY: 100 g`;
+
+    const faceInputs = [
+      { face: 'FRONT', imageId: 'img-1', fullText: 'FRONT PANEL:\nACME\nCHOCOLATE BISCUITS' },
+      { face: 'BACK', imageId: 'img-2', fullText: 'BACK PANEL:\nManufactured By: ACME FOODS PRIVATE LIMITED, MUMBAI.\nNET QUANTITY: 100 g' },
+    ];
+
+    const meta = service.extractProductMetadata(sampleOcrText, faceInputs);
+    const declarations = service.extractDeclarations(faceInputs, 'img-1');
+
+    const mfgNameField = declarations.find((f: any) => f.fieldKey === 'manufacturer_name');
+
+    expect(meta.brand).toBe('ACME');
+    expect(meta.brand).not.toBe('ACME FOODS PRIVATE LIMITED');
+    expect(mfgNameField?.rawValue).toBe('ACME FOODS PRIVATE LIMITED');
+    expect(mfgNameField?.sourceFace).toBe('BACK');
+  });
+
+  test('Generic Candidate Scoring & Sentence Rejection Test (Milkmaid)', () => {
+    const { AiExtractionService } = require('../src/services/ai/aiExtractionService');
+    const service = new AiExtractionService();
+
+    const sampleOcrText = `FRONT PANEL:
+NESTLÉ
+MILKMAID
+Sweetened Condensed Partly Skimmed Milk
+
+BACK PANEL:
+with times nature and Youcan
+Mkt by: Nestlé India Limited
+NET QUANTITY: 190 g`;
+
+    const faceInputs = [
+      { face: 'FRONT', imageId: 'img-1', fullText: 'NESTLÉ\nMILKMAID\nSweetened Condensed Partly Skimmed Milk' },
+      { face: 'BACK', imageId: 'img-2', fullText: 'with times nature and Youcan\nMkt by: Nestlé India Limited\nNET QUANTITY: 190 g' },
+    ];
+
+    const meta = service.extractProductMetadata(sampleOcrText, faceInputs);
+
+    expect(meta.name).toBe('Sweetened Condensed Partly Skimmed Milk');
+    expect(meta.name).not.toContain('with times nature');
+    expect(meta.brand).toBe('NESTLÉ');
+    expect(meta.variant).toBeNull(); // 190g is net quantity, not variant
   });
 });

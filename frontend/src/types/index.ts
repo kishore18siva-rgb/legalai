@@ -91,12 +91,15 @@ export interface AutoScanResponse {
   inspectionId: string;
   inspectionNumber: string;
   detectedProduct: {
-    name: string;
-    brand: string;
+    name: string | null;
+    brand: string | null;
+    variant?: string | null;
     category: string;
     categoryConfidence: number;
     categoryReason: string;
   };
+  fullOcrText?: string;
+  rawOcrByFace?: Array<{ face: string; text: string; confidence: number; imageId?: string }>;
   pdpInfo?: {
     pdpFace: string;
     confidence: number;

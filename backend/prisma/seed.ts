@@ -7,44 +7,71 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding LegalLens database with users and Legal Metrology Rules, 2011...');
 
-  // 1. Create Default Users with Hashed Passwords
-  const passwordHash = await bcrypt.hash('Admin@123456', 10);
+  // 1. Create Default Provisioned Users with Hashed Passwords
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@legallens.gov.in';
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Admin@123456';
+  const reviewerEmail = process.env.INITIAL_REVIEWER_EMAIL || 'reviewer@legallens.gov.in';
+  const reviewerPassword = process.env.INITIAL_REVIEWER_PASSWORD || 'Admin@123456';
+
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
+  const reviewerPasswordHash = await bcrypt.hash(reviewerPassword, 10);
   const inspectorPasswordHash = await bcrypt.hash('Inspector@123', 10);
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@legallens.gov.in' },
-    update: {},
+    where: { email: adminEmail },
+    update: {
+      passwordHash: adminPasswordHash,
+      role: 'SYSTEM_ADMINISTRATOR',
+      status: 'ACTIVE',
+    },
     create: {
-      email: 'admin@legallens.gov.in',
+      email: adminEmail,
       name: 'System Administrator',
-      password: passwordHash,
-      role: 'ADMIN',
+      phoneNumber: '+91 98765 00001',
+      employeeNumber: 'EMP-ADM-001',
+      passwordHash: adminPasswordHash,
+      role: 'SYSTEM_ADMINISTRATOR',
+      status: 'ACTIVE',
     },
   });
 
   const legalReviewer = await prisma.user.upsert({
-    where: { email: 'reviewer@legallens.gov.in' },
-    update: {},
+    where: { email: reviewerEmail },
+    update: {
+      passwordHash: reviewerPasswordHash,
+      role: 'SENIOR_LEGAL_OFFICER',
+      status: 'ACTIVE',
+    },
     create: {
-      email: 'reviewer@legallens.gov.in',
+      email: reviewerEmail,
       name: 'Senior Legal Officer',
-      password: passwordHash,
-      role: 'LEGAL_REVIEWER',
+      phoneNumber: '+91 98765 00002',
+      employeeNumber: 'EMP-REV-002',
+      passwordHash: reviewerPasswordHash,
+      role: 'SENIOR_LEGAL_OFFICER',
+      status: 'ACTIVE',
     },
   });
 
   const inspector = await prisma.user.upsert({
     where: { email: 'inspector@legallens.gov.in' },
-    update: {},
+    update: {
+      passwordHash: inspectorPasswordHash,
+      role: 'COMPLIANCE_OFFICER',
+      status: 'ACTIVE',
+    },
     create: {
       email: 'inspector@legallens.gov.in',
       name: 'Compliance Officer Sharma',
-      password: inspectorPasswordHash,
-      role: 'INSPECTOR',
+      phoneNumber: '+91 98765 00003',
+      employeeNumber: 'EMP-INS-003',
+      passwordHash: inspectorPasswordHash,
+      role: 'COMPLIANCE_OFFICER',
+      status: 'ACTIVE',
     },
   });
 
-  console.log(`Users created: Admin (${admin.email}), Reviewer (${legalReviewer.email}), Inspector (${inspector.email})`);
+  console.log(`Users created/updated: Admin (${admin.email}), Reviewer (${legalReviewer.email}), Inspector (${inspector.email})`);
 
   // 2. Create Initial Legal Source Document Record
   const pdfHash = crypto.createHash('sha256').update('The Legal Metrology (Packaged Commodities) Rules, 2011').digest('hex');

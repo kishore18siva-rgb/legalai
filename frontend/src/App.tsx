@@ -12,6 +12,7 @@ import { RulesPage } from './pages/RulesPage';
 import { LegalSourcesPage } from './pages/LegalSourcesPage';
 import { RuleUpdatesPage } from './pages/RuleUpdatesPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { RegisterInspectorPage } from './pages/RegisterInspectorPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, loading } = useAuth();
@@ -27,6 +28,7 @@ export const App: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-slate-50">
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/register-inspector" element={<RegisterInspectorPage />} />
             <Route
               path="/*"
               element={

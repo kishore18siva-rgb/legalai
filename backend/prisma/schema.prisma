@@ -4,23 +4,27 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
-
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("INSPECTOR") // ADMIN, LEGAL_REVIEWER, INSPECTOR, VIEWER
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String
+  name           String
+  phoneNumber    String?   @unique
+  employeeNumber String?   @unique
+  role           String    @default("COMPLIANCE_OFFICER") // SYSTEM_ADMINISTRATOR, SENIOR_LEGAL_OFFICER, COMPLIANCE_OFFICER
+  status         String    @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED, PENDING
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  inspections        Inspection[]
-  manualCorrections  ExtractedField[] @relation("CorrectedBy")
-  approvedRuleUpdates RuleUpdate[]    @relation("ApprovedBy")
-  reports            Report[]
-  auditLogs          AuditLog[]
+  inspections         Inspection[]
+  manualCorrections   ExtractedField[] @relation("CorrectedBy")
+  approvedRuleUpdates RuleUpdate[]     @relation("ApprovedBy")
+  reports             Report[]
+  auditLogs           AuditLog[]
 }
 
 model LegalSource {

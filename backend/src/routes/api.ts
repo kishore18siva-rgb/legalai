@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-import { login, getMe } from '../controllers/authController';
+import { login, registerInspector, getMe } from '../controllers/authController';
 import { getDashboardStats } from '../controllers/dashboardController';
 import {
   autoScanInspection,
@@ -51,14 +51,21 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
 });
 
+import { listUsers, updateUserStatus } from '../controllers/adminController';
+
 // PUBLIC AUTH
 router.post('/auth/login', login);
+router.post('/auth/register/inspector', registerInspector);
 
 // PROTECTED
 router.use(authenticateJWT);
 
 router.get('/auth/me', getMe);
 router.get('/dashboard', getDashboardStats);
+
+// SYSTEM ADMINISTRATOR USER MANAGEMENT
+router.get('/admin/users', requireRole(['SYSTEM_ADMINISTRATOR', 'ADMIN']), listUsers);
+router.put('/admin/users/:id/status', requireRole(['SYSTEM_ADMINISTRATOR', 'ADMIN']), updateUserStatus);
 
 // INSPECTIONS WORKFLOW
 router.post('/inspections/auto-scan', upload.array('images', 10), autoScanInspection);

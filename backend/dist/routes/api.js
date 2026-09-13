@@ -24,12 +24,17 @@ const upload = (0, multer_1.default)({
     dest: storageDir,
     limits: { fileSize: 15 * 1024 * 1024 },
 });
+const adminController_1 = require("../controllers/adminController");
 // PUBLIC AUTH
 router.post('/auth/login', authController_1.login);
+router.post('/auth/register/inspector', authController_1.registerInspector);
 // PROTECTED
 router.use(auth_1.authenticateJWT);
 router.get('/auth/me', authController_1.getMe);
 router.get('/dashboard', dashboardController_1.getDashboardStats);
+// SYSTEM ADMINISTRATOR USER MANAGEMENT
+router.get('/admin/users', (0, auth_1.requireRole)(['SYSTEM_ADMINISTRATOR', 'ADMIN']), adminController_1.listUsers);
+router.put('/admin/users/:id/status', (0, auth_1.requireRole)(['SYSTEM_ADMINISTRATOR', 'ADMIN']), adminController_1.updateUserStatus);
 // INSPECTIONS WORKFLOW
 router.post('/inspections/auto-scan', upload.array('images', 10), inspectionController_1.autoScanInspection);
 router.post('/inspections/:id/confirm-and-evaluate', inspectionController_1.confirmAndEvaluateInspection);

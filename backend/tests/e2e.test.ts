@@ -42,6 +42,7 @@ describe('LegalLens Image-First Auto-Scan E2E Test Suite', () => {
       .attach('images', sampleImagePath)
       .attach('images', sampleImagePath);
 
+    // Verify multi-face auto-scan behavior
     expect(res.status).toBe(200);
     expect(res.body.inspectionId).toBeDefined();
     expect(res.body.detectedProduct.category).toBeDefined();

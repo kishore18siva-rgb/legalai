@@ -18,6 +18,26 @@ class AuthService {
     return User.fromJson(userData);
   }
 
+  static Future<Map<String, dynamic>> registerInspector({
+    required String name,
+    required String email,
+    required String phoneNumber,
+    required String employeeNumber,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    final res = await ApiService.post('/auth/register/inspector', {
+      'name': name,
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'employeeNumber': employeeNumber,
+      'password': password,
+      'confirmPassword': confirmPassword,
+    });
+
+    return res;
+  }
+
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('legallens_token');
@@ -30,6 +50,7 @@ class AuthService {
       final res = await ApiService.get('/auth/me');
       return User.fromJson(res['user']);
     } catch (e) {
+      await logout();
       return null;
     }
   }

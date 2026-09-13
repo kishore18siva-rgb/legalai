@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, Lock, Mail, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, UserPlus } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,6 +14,11 @@ export const Login: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -25,11 +30,6 @@ export const Login: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillDemoUser = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
   };
 
   return (
@@ -47,7 +47,7 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleLogin} className="p-8 space-y-5">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-lg font-medium">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-lg font-medium text-center">
               {error}
             </div>
           )}
@@ -62,7 +62,7 @@ export const Login: React.FC = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                placeholder="inspector@legallens.gov.in"
+                placeholder="Enter official email"
               />
             </div>
           </div>
@@ -77,7 +77,7 @@ export const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                placeholder="••••••••"
+                placeholder="Enter password"
               />
             </div>
           </div>
@@ -91,32 +91,15 @@ export const Login: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
 
-          {/* Quick Demo Credentials Buttons */}
-          <div className="pt-4 border-t border-gray-200 text-center">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Quick Dev / Demo Logins</p>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => fillDemoUser('inspector@legallens.gov.in', 'Inspector@123')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-1.5 px-2 rounded font-semibold transition"
-              >
-                Inspector
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemoUser('reviewer@legallens.gov.in', 'Admin@123456')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-1.5 px-2 rounded font-semibold transition"
-              >
-                Reviewer
-              </button>
-              <button
-                type="button"
-                onClick={() => fillDemoUser('admin@legallens.gov.in', 'Admin@123456')}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-1.5 px-2 rounded font-semibold transition"
-              >
-                Admin
-              </button>
-            </div>
+          <div className="pt-4 border-t border-gray-200 text-center space-y-2">
+            <p className="text-xs text-gray-500 font-medium">Don't have an inspector account?</p>
+            <Link
+              to="/register-inspector"
+              className="inline-flex items-center justify-center space-x-2 w-full border border-legal-700 text-legal-800 hover:bg-blue-50 font-bold py-2.5 px-4 rounded-lg text-xs transition"
+            >
+              <UserPlus className="w-4 h-4 text-legal-700" />
+              <span>Create New Inspector Account</span>
+            </Link>
           </div>
         </form>
       </div>

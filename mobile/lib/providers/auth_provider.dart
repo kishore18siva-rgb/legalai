@@ -37,6 +37,34 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> registerInspector({
+    required String name,
+    required String email,
+    required String phoneNumber,
+    required String employeeNumber,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await AuthService.registerInspector(
+        name: name,
+        email: email,
+        phoneNumber: phoneNumber,
+        employeeNumber: employeeNumber,
+        password: password,
+        confirmPassword: confirmPassword,
+      );
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     await AuthService.logout();
     _user = null;
