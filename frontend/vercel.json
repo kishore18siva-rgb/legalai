@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://legalai-92m0.onrender.com/api/$1"
+    },
+    {
+      "source": "/storage/(.*)",
+      "destination": "https://legalai-92m0.onrender.com/storage/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
