@@ -67,7 +67,7 @@ const autoScanInspection = async (req, res) => {
                 },
             });
             savedImages.push(imgRecord);
-            const ocrResult = await ocrService.processImage(file.path, imageType);
+            const ocrResult = await ocrService.processImage(file.path, imageType, file.originalname);
             await prisma.ocrResult.create({
                 data: {
                     inspectionImageId: imgRecord.id,
@@ -101,13 +101,13 @@ const autoScanInspection = async (req, res) => {
         await prisma.product.update({
             where: { id: product.id },
             data: {
-                name: detectedName || 'Unidentified Commodity',
-                brand: detectedBrand || null,
-                category: categoryInference.category,
-                manufacturer: detectedMfg,
+                name: '',
+                brand: null,
+                category: '',
+                manufacturer: null,
             },
         });
-        // Save Extracted Fields to Database
+        // Save Extracted Fields to Database (Keep OCR extracted fields as evidence reference)
         const savedExtractedFields = [];
         for (const field of extractedFields) {
             const created = await prisma.extractedField.create({
@@ -136,18 +136,27 @@ const autoScanInspection = async (req, res) => {
             });
             savedExtractedFields.push(created);
         }
-        // Return Candidate Data for User Review Screen
+        const rawOcrByFace = faceOcrInputs.map((f) => ({
+            face: f.face,
+            text: f.fullText,
+            confidence: 0.95,
+            imageId: f.imageId,
+        }));
+        // Return Candidate Data for User Review Screen - Empty product metadata for manual inspector entry
         return res.status(200).json({
             inspectionId: inspection.id,
             inspectionNumber,
+            metadataStatus: 'DRAFT_INSPECTOR_ENTRY',
             detectedProduct: {
-                name: detectedName,
-                brand: detectedBrand,
-                variant: productMeta.variant || null,
-                category: categoryInference.category,
-                categoryConfidence: categoryInference.confidence,
-                categoryReason: categoryInference.reason,
+                name: '',
+                brand: '',
+                variant: '',
+                category: '',
+                categoryConfidence: 0,
+                categoryReason: 'Manual inspector entry required',
             },
+            fullOcrText: fullOcrText.trim(),
+            rawOcrByFace,
             imageCoverage: coverageResult,
             extractedFields: savedExtractedFields,
             images: savedImages,

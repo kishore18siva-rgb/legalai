@@ -92,16 +92,16 @@ class PdfReportService {
         y = 80;
         page.drawRectangle({
             x: 30,
-            y: 30,
+            y: 25,
             width: width - 60,
-            height: 45,
+            height: 50,
             color: (0, pdf_lib_1.rgb)(0.98, 0.98, 0.98),
             borderColor: (0, pdf_lib_1.rgb)(0.8, 0.8, 0.8),
             borderWidth: 1,
         });
-        page.drawText('STATUTORY LEGAL DISCLAIMER:', { x: 40, y: 62, size: 8, font: fontBold, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
-        page.drawText('This assessment is an automated compliance-assistance result and does not constitute a legal determination.', { x: 40, y: 50, size: 7, font, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
-        page.drawText('Final enforcement or legal interpretation must be performed by the competent authority or qualified legal professional.', { x: 40, y: 40, size: 7, font, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
+        page.drawText('STATUTORY LEGAL DISCLAIMER & DATA ORIGIN:', { x: 40, y: 62, size: 8, font: fontBold, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
+        page.drawText('Product information was manually entered and confirmed by the inspecting officer. Assessment uses captured package images as evidence.', { x: 40, y: 50, size: 7, font, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
+        page.drawText('This assessment is an automated compliance-assistance result and final enforcement remains with the competent authority.', { x: 40, y: 38, size: 7, font, color: (0, pdf_lib_1.rgb)(0.4, 0.4, 0.4) });
         const pdfBytes = await pdfDoc.save();
         const dir = path_1.default.dirname(outputPath);
         if (!fs_1.default.existsSync(dir))

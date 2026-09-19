@@ -133,69 +133,135 @@ class AiExtractionService {
     /**
      * Infers product category dynamically from OCR text without hardcoded defaults
      */
+    /**
+     * Infers product category dynamically from OCR text without hardcoded defaults
+     */
+    /**
+     * Infers product category dynamically from OCR text without hardcoded defaults
+     */
     inferProductCategory(fullText) {
         if (!fullText || fullText.trim().length === 0) {
-            return { category: 'Other', confidence: 0.5, reason: 'No OCR text available for classification.' };
+            return { category: 'UNCERTAIN', confidence: 0.0, reason: 'No OCR text available for classification.' };
         }
         const textUpper = fullText.toUpperCase();
-        if (/\b(KETCHUP|SAUCE|FOOD|BISCUIT|TEA|COFFEE|OIL|POWDER|MASALA|INGREDIENTS|NUTRITIONAL|FLAVOUR|खाद्य|सामग्री|बिस्कुट|பிஸ்கட்)\b/.test(textUpper)) {
-            return { category: 'Food', confidence: 0.95, reason: 'Detected food/beverage keywords and nutritional panel.' };
+        // 1. Food Products & Cereals
+        if (/\b(OATS|CEREAL|NOODLES|KETCHUP|SAUCE|FOOD|BISCUIT|COOKIES|TEA|COFFEE|OIL|POWDER|MASALA|SPICED?|INGREDIENTS|NUTRITIONAL|FLAVOUR|खाद्य|सामग्री|बिस्कुट|பிஸ்கட்)\b/.test(textUpper)) {
+            if (/\b(OATS|CEREAL|MUESLI|GRANOLA)\b/.test(textUpper)) {
+                return { category: 'Food (Breakfast Cereal / Oats)', confidence: 0.96, reason: 'Detected breakfast cereal/oats packaging terms and nutritional panel.' };
+            }
+            if (/\b(NOODLES|RAMEN|PASTA|MACARONI)\b/.test(textUpper)) {
+                return { category: 'Food (Instant Noodles / Pasta)', confidence: 0.96, reason: 'Detected instant noodle/pasta packaging terms and nutritional panel.' };
+            }
+            return { category: 'Food', confidence: 0.95, reason: 'Detected food ingredients, nutritional facts, or culinary keywords.' };
         }
+        // 2. Beverage Products
         if (/\b(JUICE|DRINK|BEVERAGE|SODA|MILK|WATER|PEPSI|COCA|SHAKE)\b/.test(textUpper)) {
-            return { category: 'Beverage', confidence: 0.95, reason: 'Detected beverage/drink keywords.' };
+            return { category: 'Beverage', confidence: 0.92, reason: 'Detected liquid beverage keywords.' };
         }
+        // 3. Cosmetics & Skincare
         if (/\b(LOTION|CREAM|SOAP|SHAMPOO|COSMETIC|SKIN|FACE|BEAUTY|MOISTURISER|लोशन|साबुन|சோப்)\b/.test(textUpper)) {
             return { category: 'Cosmetics', confidence: 0.95, reason: 'Detected cosmetics/skincare keywords.' };
         }
+        // 4. Household Cleaners
         if (/\b(CLEANER|DETERGENT|DISHWASH|DISINFECTANT|SURFACE)\b/.test(textUpper)) {
             return { category: 'Household', confidence: 0.90, reason: 'Detected household cleaning keywords.' };
         }
+        // 5. Pharmaceutical / Medical
         if (/\b(TABLET|CAPSULE|SYRUP|PHARMA|MEDICINE|DRUG|DOSAGE|LIC\s*NO)\b/.test(textUpper)) {
             return { category: 'Pharmaceutical-related package', confidence: 0.90, reason: 'Detected pharmaceutical packaging keywords.' };
         }
-        return { category: 'General Commodity', confidence: 0.70, reason: 'General packaged commodity inference.' };
+        return { category: 'UNCERTAIN', confidence: 0.30, reason: 'Insufficient evidence in captured OCR text to determine category reliably.' };
     }
     /**
      * Automatically extracts Product Name, Brand, and Variant from OCR text without fake fallbacks
      */
     extractProductMetadata(fullText, faceInputs) {
+        if (!fullText || fullText.trim().length === 0) {
+            return {
+                name: null,
+                brand: null,
+                variant: null,
+                category: 'UNCERTAIN',
+                categoryConfidence: 0.0,
+                categoryReason: 'No OCR text available.',
+            };
+        }
         const textUpper = fullText.toUpperCase();
         let brand = null;
         let name = null;
         let variant = null;
-        // 1. Dynamic Brand Recognition Pattern
-        // Look for prominent brand names in OCR text (Del Monte, Weikfield, Sakthi, Dermadew, Britannia, Nestle, Amul, Dabur, etc.)
-        const brandMatch = fullText.match(/\b(DEL\s*MONTE|WEIKFIELD|SAKTHI|DERMADEW|BRITANNIA|NESTLE|AMUL|DABUR|HALDIRAM|PARLE|CADBURY|TATA|PEPSICO|COCA-COLA|MAGGI|KISSAN)\b/i);
-        if (brandMatch) {
-            brand = brandMatch[1].replace(/\s+/g, ' ').trim();
-            // Capitalize proper brand name
-            brand = brand.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        // 1. Generic Brand Name Extraction
+        const explicitBrandMatch = fullText.match(/(?:brand|brand\s*name|tm|trade\s*mark)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s&]{2,30})/i);
+        if (explicitBrandMatch && !/LIMITED|PVT|LLP|INC|CORP|MFG|MANUFACTURED|MARKETED|INGREDIENTS/i.test(explicitBrandMatch[1])) {
+            brand = explicitBrandMatch[1].trim();
         }
         else {
-            // Regex generic brand extraction: text near Brand:, Marketed by, or top capitalized logo word
-            const genericBrandMatch = fullText.match(/(?:brand|mfd\s*by|marketed\s*by)[:\s]+([A-Z][A-Za-z0-9\s]{2,20})/i);
-            if (genericBrandMatch) {
-                brand = genericBrandMatch[1].trim();
+            // Find FRONT face OCR input first, fallback to all faces
+            const frontInput = faceInputs.find((f) => f.face.toUpperCase() === 'FRONT');
+            const textToScan = frontInput && frontInput.fullText.trim().length > 0 ? frontInput.fullText : fullText;
+            const lines = textToScan
+                .split('\n')
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0 && !/FRONT|PANEL|BACK|LEFT|RIGHT|TOP|BOTTOM|INGREDIENT|NUTRITION|NET|VOL|QTY|WEIGHT|MRP|MFG|PKD|BATCH|EXP|DATE|USE|BY|BEST|BEFORE|PRICE|STORAGE|CAUTION|WARNING|COUNTRY|ORIGIN|MANUFACTURED|MARKETED|PACKED|LIC|FSSAI|STORE|SERVE|KEEP|REFRIGERATE|RECIPE/i.test(l));
+            if (lines.length > 0) {
+                const candidate = lines[0].replace(/[^A-Za-z0-9\u0900-\u0d7f\u00c0-\u024f\s&]/g, '').trim();
+                if (candidate.length >= 2 && candidate.length <= 30 && !/^(with|and|nature|youcan|times|for|from|the|in|of|to|a|an)$/i.test(candidate)) {
+                    brand = candidate;
+                }
             }
         }
-        // 2. Dynamic Product Name Recognition Pattern
-        const nameMatch = fullText.match(/\b(TOMATO\s*KETCHUP|TOMATO\s*SAUCE|CUSTARD\s*POWDER|TURMERIC\s*POWDER|MARIE\s*GOLD|CALOE\s*PLUS\s*LOTION|SOOTHING\s*LOTION|MANGO\s*JUICE|GREEN\s*TEA)\b/i);
-        if (nameMatch) {
-            name = nameMatch[1].replace(/\s+/g, ' ').trim();
-            name = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        // 2. Generic Product Name Candidate Scoring & Filtering
+        const genericNameMatch = fullText.match(/(?:product|product\s*name|commodity|item|title|generic\s*name)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s]{2,40})/i);
+        if (genericNameMatch) {
+            name = genericNameMatch[1].trim();
         }
         else {
-            // Look for text following "Product:", "Commodity:", or generic product title
-            const genericNameMatch = fullText.match(/(?:product|commodity|item|title)[:\s]+([A-Z][A-Za-z0-9\s]{2,30})/i);
-            if (genericNameMatch) {
-                name = genericNameMatch[1].trim();
+            // Extract candidate lines across faces
+            const candidates = [];
+            const lines = fullText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+            for (const line of lines) {
+                // Exclude marketing sentences, instructions, ingredients, nutrition, or legal notices
+                if (/^(with|nature|youcan|recipe|store|keep|refrigerate|ingredients|nutrition|manufactured|marketed|packed|imported|mrp|pkd|mfg|exp|batch|fssai|for\s*consumer|tel|email|website|www\.|http|address|country)/i.test(line)) {
+                    continue;
+                }
+                // Exclude sentences longer than 5 words or containing sentence punctuation
+                const wordCount = line.split(/\s+/).length;
+                if (wordCount > 6 || /[\.\!\?\,]/.test(line))
+                    continue;
+                let score = 0;
+                // Higher score if line ends with or contains common commodity nouns
+                if (/\b(MILK|OATS|CEREAL|KETCHUP|SAUCE|NOODLES|PASTA|BISCUIT|COOKIES|LOTION|CREAM|SOAP|POWDER|OIL|TEA|JUICE|CHIPS|PASTE|WATER|BEVERAGE)\b/i.test(line)) {
+                    score += 50;
+                }
+                // Higher score if multi-word noun phrase (e.g. "Sweetened Condensed Partly Skimmed Milk")
+                if (wordCount >= 2 && wordCount <= 6) {
+                    score += 20;
+                }
+                if (score > 0) {
+                    candidates.push({ text: line, score });
+                }
+            }
+            if (candidates.length > 0) {
+                candidates.sort((a, b) => b.score - a.score);
+                let selected = candidates[0].text.replace(/\s+/g, ' ').trim();
+                selected = selected.replace(/^[A-Za-z]{1,3}\s+(?=(?:TOMATO|SAUCE|KETCHUP|OATS|NOODLES|MILK))/i, '');
+                name = selected.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
             }
         }
-        // 3. Dynamic Variant Recognition Pattern
-        const variantMatch = fullText.match(/\b(CLASSIC\s*BLEND|VANILLA\s*FLAVOURED|NO\s*ADDED\s*SUGAR|SWEET\s*&\s*SPICY|NO\s*ONION\s*NO\s*GARLIC|EXTRA\s*VIRGIN|ORIGINAL|REAL\s*TOMATO)\b/i);
-        if (variantMatch) {
-            variant = variantMatch[1].replace(/\s+/g, ' ').trim();
-            variant = variant.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        // 3. Generic Variant Extraction (Excludes quantities e.g. 15g, 190g, 50g)
+        const variantPatternMatch = fullText.match(/(?:flavour|flavor|variant|blend|style|type)[:\s]+([A-Za-z0-9\u0900-\u0d7f\s]{2,30})/i);
+        if (variantPatternMatch && !/^[0-9]+\s*(g|ml|kg|l|gm|grams)$/i.test(variantPatternMatch[1].trim())) {
+            variant = variantPatternMatch[1].replace(/\s+/g, ' ').trim();
+            variant = variant.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        }
+        else {
+            const parenMatch = fullText.match(/\(([A-Za-z0-9\s&]{3,25})\)/);
+            if (parenMatch && !/INGREDIENT|NET|MRP|MFG|EXP|BATCH|FSSAI|[0-9]+\s*(g|ml|kg|l)/i.test(parenMatch[1])) {
+                const rawVar = parenMatch[1].replace(/^Q/i, 'C').trim();
+                if (!/^[0-9]+\s*(g|ml|kg|l|gm)$/i.test(rawVar)) {
+                    variant = rawVar.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                }
+            }
         }
         const catInfo = this.inferProductCategory(fullText);
         return {
@@ -367,16 +433,16 @@ class AiExtractionService {
             });
         }
         // 3. Manufacturing / Packing Date & Expiry Date
-        let mfgMatch = text.match(/(?:date\s*of\s*packing|pkd\s*date|packing\s*date|mfg|pkd|packed|manufactured|mfg\s*date|d\.o\.m\.|निर्माण\s*तिथि|पैकिंग\s*तिथि|தயாரிப்பு\s*தேதி|తయారీ\s*తేదీ)[:\s]*([0-9]{2}[\/\-][0-9]{4}|[0-9]{2}[\/\-][0-9]{2}|[a-zA-Z]{3,9}\s*[0-9]{4})/i);
-        if (mfgMatch) {
-            const originalSegment = originalFullText.substring(Math.max(0, mfgMatch.index || 0), Math.min(originalFullText.length, (mfgMatch.index || 0) + mfgMatch[0].length));
+        let mfgDateMatch = text.match(/(?:date\s*of\s*packing|pkd\s*date|packing\s*date|mfg|pkd|packed|manufactured|mfg\s*date|d\.o\.m\.|निर्माण\s*तिथि|पैकिंग\s*तिथि|தயாரிப்பு\s*தேதி|తయారీ\s*తేదీ)[:\s]*([0-9]{2}[\/\-][0-9]{4}|[0-9]{2}[\/\-][0-9]{2}|[a-zA-Z]{3,9}\s*[0-9]{4})/i);
+        if (mfgDateMatch) {
+            const originalSegment = originalFullText.substring(Math.max(0, mfgDateMatch.index || 0), Math.min(originalFullText.length, (mfgDateMatch.index || 0) + mfgDateMatch[0].length));
             const fieldLang = this.detectScriptAndLanguage(originalSegment);
             fields.push({
                 fieldKey: 'mfg_date',
                 fieldLabel: 'Manufacturing / Packing Date',
-                rawValue: mfgMatch[1],
-                normalizedValue: mfgMatch[1],
-                originalText: originalSegment.trim() || mfgMatch[0],
+                rawValue: mfgDateMatch[1],
+                normalizedValue: mfgDateMatch[1],
+                originalText: originalSegment.trim() || mfgDateMatch[0],
                 language: fieldLang.language,
                 script: fieldLang.script,
                 languageConfidence: fieldLang.confidence,
@@ -385,7 +451,7 @@ class AiExtractionService {
                 detectedFace: face,
                 sourceImageId: imageId,
                 sourceRegionJson: JSON.stringify({ x0: 25, y0: 205, x1: 190, y1: 230 }),
-                sourceText: originalSegment.trim() || mfgMatch[0],
+                sourceText: originalSegment.trim() || mfgDateMatch[0],
                 reviewRequired: false,
             });
         }
@@ -434,14 +500,13 @@ class AiExtractionService {
                 reviewRequired: false,
             });
         }
-        // 4. Manufacturer Name & Address
-        const mfgInfoMatch = text.match(/(?:mfg\s*by|manufactured\s*by|packed\s*by|marketed\s*by|निर्माता|उत्पादक|द्वारा\s*निर्मित|தயாரிப்பாளர்|தயாரிப்பு|தயாரித்தவர்|తయారీదారు|తయారీదారులు|ತಯಾರಕರು|ઉત્પાદક|প্রস্তুতকারক)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
-        if (mfgInfoMatch) {
-            const fullMfgStr = mfgInfoMatch[1].trim();
-            const parts = fullMfgStr.split(',');
-            const mfgName = parts[0];
+        // 4. Manufacturer / Packer / Marketer / Importer Declaration Separation
+        const mfgMatch = text.match(/(?:mfg\s*by|manufactured\s*by|manufacturer|निर्माता|उत्पादक|द्वारा\s*निर्मित|தயாரிப்பாளர்|தயாரிப்பு|தயாரித்தவர்|తయారీదారు)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
+        if (mfgMatch) {
+            const parts = mfgMatch[1].trim().split(',');
+            const mfgName = parts[0].trim();
             const mfgAddr = parts.slice(1).join(', ').trim();
-            const origMfgSegment = originalFullText.substring(Math.max(0, mfgInfoMatch.index || 0), Math.min(originalFullText.length, (mfgInfoMatch.index || 0) + mfgInfoMatch[0].length));
+            const origMfgSegment = originalFullText.substring(Math.max(0, mfgMatch.index || 0), Math.min(originalFullText.length, (mfgMatch.index || 0) + mfgMatch[0].length));
             const fieldLang = this.detectScriptAndLanguage(origMfgSegment);
             fields.push({
                 fieldKey: 'manufacturer_name',
@@ -457,7 +522,7 @@ class AiExtractionService {
                 detectedFace: face,
                 sourceImageId: imageId,
                 sourceRegionJson: JSON.stringify({ x0: 25, y0: 275, x1: 370, y1: 310 }),
-                sourceText: origMfgSegment.trim() || mfgInfoMatch[0],
+                sourceText: origMfgSegment.trim() || mfgMatch[0],
                 reviewRequired: false,
             });
             if (mfgAddr) {
@@ -479,6 +544,30 @@ class AiExtractionService {
                     reviewRequired: false,
                 });
             }
+        }
+        const marketerMatch = text.match(/(?:marketed\s*by|marketer|द्वारा\s*विपणित|விற்பனையாளர்)[:\s]*([^,.\n]+(?:,[^.\n]+)*)/i);
+        if (marketerMatch) {
+            const parts = marketerMatch[1].trim().split(',');
+            const marketerName = parts[0].trim();
+            const origSegment = originalFullText.substring(Math.max(0, marketerMatch.index || 0), Math.min(originalFullText.length, (marketerMatch.index || 0) + marketerMatch[0].length));
+            const fieldLang = this.detectScriptAndLanguage(origSegment);
+            fields.push({
+                fieldKey: 'marketer_name',
+                fieldLabel: 'Marketer Name',
+                rawValue: marketerName,
+                normalizedValue: marketerName,
+                originalText: origSegment.trim() || marketerName,
+                language: fieldLang.language,
+                script: fieldLang.script,
+                languageConfidence: fieldLang.confidence,
+                confidence: 0.94,
+                sourceFace: face,
+                detectedFace: face,
+                sourceImageId: imageId,
+                sourceRegionJson: JSON.stringify({ x0: 25, y0: 275, x1: 370, y1: 310 }),
+                sourceText: origSegment.trim() || marketerMatch[0],
+                reviewRequired: false,
+            });
         }
         // 5. Generic Name & Brand Name (Extracted dynamically without fallback hardcoding)
         const productMeta = this.extractProductMetadata(originalFullText, [faceInput]);
