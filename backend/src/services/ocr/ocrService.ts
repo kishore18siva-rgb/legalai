@@ -93,9 +93,7 @@ export class OcrService {
       // Candidate B: Upscaled Grayscale + Sharpen + Normalize (PSM 6)
       try {
         let pipeline = sharp(imagePath);
-        if (origWidth < 1400) {
-          pipeline = pipeline.resize({ width: 1800, fit: 'inside', withoutEnlargement: false });
-        }
+        pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
         const bufferB = await pipeline.grayscale().normalize().sharpen().toBuffer();
         candidates.push({ name: 'upscaled_grayscale_psm6', buffer: bufferB, psm: '6' });
       } catch (e) {}
@@ -103,9 +101,7 @@ export class OcrService {
       // Candidate C: Upscaled Contrast Boost / Binarized (PSM 11 - Sparse Text / Multi-Region Label)
       try {
         let pipeline = sharp(imagePath);
-        if (origWidth < 1400) {
-          pipeline = pipeline.resize({ width: 1800, fit: 'inside', withoutEnlargement: false });
-        }
+        pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
         const bufferC = await pipeline.grayscale().threshold(150).toBuffer();
         candidates.push({ name: 'binarized_psm11', buffer: bufferC, psm: '11' });
       } catch (e) {}
@@ -120,51 +116,53 @@ export class OcrService {
       // 2. Evaluate Candidates & Select Best Real OCR Output
       const worker = await createWorker('eng');
 
-      for (const cand of candidates) {
-        await worker.setParameters({
-          tessedit_pageseg_mode: cand.psm as any,
-        });
+      try {
+        for (const cand of candidates) {
+          await worker.setParameters({
+            tessedit_pageseg_mode: cand.psm as any,
+          });
 
-        const ret = await worker.recognize(cand.buffer);
-        const rawWords = ret.data.words || [];
+          const ret = await worker.recognize(cand.buffer);
+          const rawWords = ret.data.words || [];
 
-        // Filter out low-confidence noise & nonsensical fragments
-        const validWords = rawWords.filter((w: any) => {
-          const t = (w.text || '').trim();
-          if (!t) return false;
-          if (w.confidence < 45 && t.length <= 2) return false;
-          // Reject nonsensical garbage fragments (e.g. "Aenl", "Www", "Re") if confidence is under 60
-          if (w.confidence < 60 && /^[a-z]{2,4}$/.test(t) && !/^(of|in|to|on|at|by|or|is|no|g|ml|kg|l|re|wt)$/i.test(t)) return false;
-          return true;
-        });
+          // Filter out low-confidence noise & nonsensical fragments
+          const validWords = rawWords.filter((w: any) => {
+            const t = (w.text || '').trim();
+            if (!t) return false;
+            if (w.confidence < 45 && t.length <= 2) return false;
+            // Reject nonsensical garbage fragments (e.g. "Aenl", "Www", "Re") if confidence is under 60
+            if (w.confidence < 60 && /^[a-z]{2,4}$/.test(t) && !/^(of|in|to|on|at|by|or|is|no|g|ml|kg|l|re|wt)$/i.test(t)) return false;
+            return true;
+          });
 
-        const textLines: string[] = [];
-        let curLine = '';
-        for (const w of validWords) {
-          curLine += (curLine ? ' ' : '') + w.text;
-          if (w.text.includes('\n') || (w as any).has_space_after) {
-            textLines.push(curLine);
-            curLine = '';
+          const textLines: string[] = [];
+          let curLine = '';
+          for (const w of validWords) {
+            curLine += (curLine ? ' ' : '') + w.text;
+            if (w.text.includes('\n') || (w as any).has_space_after) {
+              textLines.push(curLine);
+              curLine = '';
+            }
+          }
+          if (curLine) textLines.push(curLine);
+
+          const candText = textLines.join('\n').trim();
+          const candAvgConf = validWords.length > 0
+            ? validWords.reduce((sum: number, w: any) => sum + (w.confidence || 50), 0) / validWords.length
+            : 0;
+
+          if (!bestResult || (candAvgConf > bestResult.avgConfidence && candText.length > 0)) {
+            bestResult = {
+              text: candText,
+              avgConfidence: candAvgConf,
+              validWords,
+              candidateName: cand.name,
+            };
           }
         }
-        if (curLine) textLines.push(curLine);
-
-        const candText = textLines.join('\n').trim();
-        const candAvgConf = validWords.length > 0
-          ? validWords.reduce((sum: number, w: any) => sum + (w.confidence || 50), 0) / validWords.length
-          : 0;
-
-        if (!bestResult || (candAvgConf > bestResult.avgConfidence && candText.length > 0)) {
-          bestResult = {
-            text: candText,
-            avgConfidence: candAvgConf,
-            validWords,
-            candidateName: cand.name,
-          };
-        }
+      } finally {
+        await worker.terminate();
       }
-
-      await worker.terminate();
 
       const recognizedText = bestResult ? bestResult.text : '';
       const avgWordConfidence = bestResult ? bestResult.avgConfidence : 0;
