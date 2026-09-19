@@ -83,12 +83,17 @@ export class OcrService {
 
       const candidates: Array<{ name: string; buffer: Buffer; psm: string }> = [];
 
-      // Candidate A: Raw Original Buffer (PSM 6)
-      candidates.push({
-        name: 'original_psm6',
-        buffer: fs.readFileSync(imagePath),
-        psm: '6',
-      });
+      // Candidate A: Resized Original Buffer (PSM 6)
+      try {
+        let pipeline = sharp(imagePath);
+        pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
+        const bufferA = await pipeline.toBuffer();
+        candidates.push({
+          name: 'original_psm6',
+          buffer: bufferA,
+          psm: '6',
+        });
+      } catch (e) {}
 
       // Candidate B: Upscaled Grayscale + Sharpen + Normalize (PSM 6)
       try {

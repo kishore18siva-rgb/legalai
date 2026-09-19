@@ -127,7 +127,19 @@ export const InspectNew: React.FC = () => {
       setLoading(false);
       setCurrentStep(3); // Move to Review Screen
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error executing package auto-scan.');
+      let errorMsg = 'Error executing package auto-scan.';
+      if (err.response?.data) {
+        if (typeof err.response.data.error === 'string') {
+          errorMsg = err.response.data.error;
+        } else if (typeof err.response.data === 'string') {
+          errorMsg = `Server Error: ${err.response.status} - Please try again.`;
+        } else {
+          errorMsg = err.response.data.message || err.response.data.error?.message || errorMsg;
+        }
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
       setLoading(false);
       setCurrentStep(1);
     }
