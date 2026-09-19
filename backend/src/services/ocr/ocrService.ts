@@ -83,32 +83,12 @@ export class OcrService {
 
       const candidates: Array<{ name: string; buffer: Buffer; psm: string }> = [];
 
-      // Candidate A: Resized Original Buffer (PSM 6)
-      try {
-        let pipeline = sharp(imagePath);
-        pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
-        const bufferA = await pipeline.toBuffer();
-        candidates.push({
-          name: 'original_psm6',
-          buffer: bufferA,
-          psm: '6',
-        });
-      } catch (e) {}
-
-      // Candidate B: Upscaled Grayscale + Sharpen + Normalize (PSM 6)
+      // Candidate B: Upscaled Grayscale + Sharpen + Normalize (PSM 6) - Best overall candidate
       try {
         let pipeline = sharp(imagePath);
         pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
         const bufferB = await pipeline.grayscale().normalize().sharpen().toBuffer();
         candidates.push({ name: 'upscaled_grayscale_psm6', buffer: bufferB, psm: '6' });
-      } catch (e) {}
-
-      // Candidate C: Upscaled Contrast Boost / Binarized (PSM 11 - Sparse Text / Multi-Region Label)
-      try {
-        let pipeline = sharp(imagePath);
-        pipeline = pipeline.resize({ width: 1800, fit: 'inside' });
-        const bufferC = await pipeline.grayscale().threshold(150).toBuffer();
-        candidates.push({ name: 'binarized_psm11', buffer: bufferC, psm: '11' });
       } catch (e) {}
 
       let bestResult: {
