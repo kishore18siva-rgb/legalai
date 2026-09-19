@@ -54,9 +54,8 @@ export const autoScanInspection = async (req: any, res: Response) => {
     const savedImages = [];
     const faceOcrInputs = [];
 
-    // 3. Process Uploaded Images & Perform Face-Specific OCR
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    // 3. Process Uploaded Images & Perform Face-Specific OCR (Parallelized)
+    const processPromises = files.map(async (file, i) => {
       const relPath = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
       const imageType = imageTypes[i] || (i === 0 ? 'FRONT' : i === 1 ? 'BACK' : i === 2 ? 'LEFT_SIDE' : i === 3 ? 'RIGHT_SIDE' : i === 4 ? 'TOP' : 'BOTTOM');
 
@@ -71,7 +70,6 @@ export const autoScanInspection = async (req: any, res: Response) => {
           fileSize: file.size,
         },
       });
-      savedImages.push(imgRecord);
 
       const ocrResult = await ocrService.processImage(file.path, imageType, file.originalname);
       await prisma.ocrResult.create({
@@ -84,15 +82,25 @@ export const autoScanInspection = async (req: any, res: Response) => {
         },
       });
 
-      faceOcrInputs.push({
-        face: imageType,
-        imageId: imgRecord.id,
-        fullText: ocrResult.fullText,
-        boundingBoxes: ocrResult.boundingBoxes,
-      });
+      return {
+        imgRecord,
+        faceInput: {
+          face: imageType,
+          imageId: imgRecord.id,
+          fullText: ocrResult.fullText,
+          boundingBoxes: ocrResult.boundingBoxes,
+        },
+        ocrResult,
+      };
+    });
 
-      fullOcrText += '\n' + ocrResult.fullText;
-      totalConfidence += ocrResult.confidence;
+    const results = await Promise.all(processPromises);
+
+    for (const res of results) {
+      savedImages.push(res.imgRecord);
+      faceOcrInputs.push(res.faceInput);
+      fullOcrText += '\n' + res.ocrResult.fullText;
+      totalConfidence += res.ocrResult.confidence;
     }
 
     const primaryImageId = savedImages[0]?.id;
