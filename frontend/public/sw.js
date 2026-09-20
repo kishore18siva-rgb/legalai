@@ -23,18 +23,35 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network first strategy for navigation requests (HTML)
+  // 1. Bypass non-GET requests (e.g., API POST/PUT requests)
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // 2. Bypass API requests to prevent caching stale data
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+
+  // 3. Network first strategy for navigation requests (HTML)
   if (event.request.mode === 'navigate' || event.request.headers.get('accept').includes('text/html')) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request).catch(() => {
+        // Fallback to the SPA shell (index.html) if offline or blocked
+        return caches.match('/index.html');
+      })
     );
     return;
   }
   
-  // Cache first for assets
+  // 4. Cache first strategy for static assets
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
+    }).catch((error) => {
+      // Gracefully handle fetch failures (e.g., adblocker ERR_BLOCKED_BY_CLIENT)
+      console.warn('Fetch failed in Service Worker:', event.request.url, error);
+      return new Response('Network error or blocked by client.', { status: 503, statusText: 'Service Unavailable' });
     })
   );
 });
