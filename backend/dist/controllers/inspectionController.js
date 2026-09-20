@@ -50,41 +50,55 @@ const autoScanInspection = async (req, res) => {
         let totalConfidence = 0;
         const savedImages = [];
         const faceOcrInputs = [];
-        // 3. Process Uploaded Images & Perform Face-Specific OCR
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const relPath = path_1.default.relative(process.cwd(), file.path).replace(/\\/g, '/');
-            const imageType = imageTypes[i] || (i === 0 ? 'FRONT' : i === 1 ? 'BACK' : i === 2 ? 'LEFT_SIDE' : i === 3 ? 'RIGHT_SIDE' : i === 4 ? 'TOP' : 'BOTTOM');
-            const quality = await ocrService.checkImageQuality(file.path);
-            const imgRecord = await prisma.inspectionImage.create({
-                data: {
-                    inspectionId: inspection.id,
-                    imageType,
-                    originalPath: relPath,
-                    processedPath: relPath,
-                    qualityStatus: quality,
-                    fileSize: file.size,
-                },
+        // 3. Process Uploaded Images & Perform Face-Specific OCR (Batched Parallelized)
+        const results = [];
+        const CONCURRENCY = 2; // Process 2 images at a time to prevent Tesseract OOM crashes
+        for (let i = 0; i < files.length; i += CONCURRENCY) {
+            const batch = files.slice(i, i + CONCURRENCY);
+            const batchPromises = batch.map(async (file, idx) => {
+                const fileIndex = i + idx;
+                const relPath = path_1.default.relative(process.cwd(), file.path).replace(/\\/g, '/');
+                const imageType = imageTypes[fileIndex] || (fileIndex === 0 ? 'FRONT' : fileIndex === 1 ? 'BACK' : fileIndex === 2 ? 'LEFT_SIDE' : fileIndex === 3 ? 'RIGHT_SIDE' : fileIndex === 4 ? 'TOP' : 'BOTTOM');
+                const quality = await ocrService.checkImageQuality(file.path);
+                const imgRecord = await prisma.inspectionImage.create({
+                    data: {
+                        inspectionId: inspection.id,
+                        imageType,
+                        originalPath: relPath,
+                        processedPath: relPath,
+                        qualityStatus: quality,
+                        fileSize: file.size,
+                    },
+                });
+                const ocrResult = await ocrService.processImage(file.path, imageType, file.originalname);
+                await prisma.ocrResult.create({
+                    data: {
+                        inspectionImageId: imgRecord.id,
+                        fullText: ocrResult.fullText,
+                        confidence: ocrResult.confidence,
+                        boundingBoxesJson: JSON.stringify(ocrResult.boundingBoxes),
+                        provider: 'tesseract',
+                    },
+                });
+                return {
+                    imgRecord,
+                    faceInput: {
+                        face: imageType,
+                        imageId: imgRecord.id,
+                        fullText: ocrResult.fullText,
+                        boundingBoxes: ocrResult.boundingBoxes,
+                    },
+                    ocrResult,
+                };
             });
-            savedImages.push(imgRecord);
-            const ocrResult = await ocrService.processImage(file.path, imageType, file.originalname);
-            await prisma.ocrResult.create({
-                data: {
-                    inspectionImageId: imgRecord.id,
-                    fullText: ocrResult.fullText,
-                    confidence: ocrResult.confidence,
-                    boundingBoxesJson: JSON.stringify(ocrResult.boundingBoxes),
-                    provider: 'tesseract',
-                },
-            });
-            faceOcrInputs.push({
-                face: imageType,
-                imageId: imgRecord.id,
-                fullText: ocrResult.fullText,
-                boundingBoxes: ocrResult.boundingBoxes,
-            });
-            fullOcrText += '\n' + ocrResult.fullText;
-            totalConfidence += ocrResult.confidence;
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
+        }
+        for (const res of results) {
+            savedImages.push(res.imgRecord);
+            faceOcrInputs.push(res.faceInput);
+            fullOcrText += '\n' + res.ocrResult.fullText;
+            totalConfidence += res.ocrResult.confidence;
         }
         const primaryImageId = savedImages[0]?.id;
         // 4. Perform Multi-Face AI Extraction & Category Inference

@@ -24,7 +24,11 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'LegalLens Backend', timestamp: new Date().toISOString() });
 });
 // Start Server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`LegalLens Backend Service running on port ${PORT}`);
     console.log(`API Base URL: http://localhost:${PORT}/api`);
 });
+// Set server timeouts to 10 minutes to prevent timeouts during long-running tasks like 6-sides package scanning
+server.timeout = 600000;
+server.keepAliveTimeout = 600000;
+server.headersTimeout = 601000;
