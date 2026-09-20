@@ -1,263 +1,257 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "windows"]
-}
 model User {
-  id             String    @id @default(uuid())
-  email          String    @unique
-  passwordHash   String
-  name           String
-  phoneNumber    String?   @unique
-  employeeNumber String?   @unique
-  role           String    @default("COMPLIANCE_OFFICER") // SYSTEM_ADMINISTRATOR, SENIOR_LEGAL_OFFICER, COMPLIANCE_OFFICER
-  status         String    @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED, PENDING
-  lastLoginAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  inspections         Inspection[]
-  manualCorrections   ExtractedField[] @relation("CorrectedBy")
-  approvedRuleUpdates RuleUpdate[]     @relation("ApprovedBy")
-  reports             Report[]
+  id                  String           @id @default(uuid())
+  email               String           @unique
+  passwordHash        String
+  name                String
+  phoneNumber         String?          @unique
+  employeeNumber      String?          @unique
+  role                String           @default("COMPLIANCE_OFFICER")
+  status              String           @default("ACTIVE")
+  lastLoginAt         DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
   auditLogs           AuditLog[]
+  manualCorrections   ExtractedField[] @relation("CorrectedBy")
+  inspections         Inspection[]
+  reports             Report[]
+  approvedRuleUpdates RuleUpdate[]     @relation("ApprovedBy")
 }
 
 model LegalSource {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   name          String
   version       String
   effectiveDate String?
   sourceUrl     String?
   fileHash      String
   filePath      String
-  status        String   @default("ACTIVE") // ACTIVE, SUPERSEDED, DRAFT
-  ruleCount     Int      @default(0)
-  uploadedAt    DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  status        String      @default("ACTIVE")
+  ruleCount     Int         @default(0)
+  uploadedAt    DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   rules         LegalRule[]
 }
 
 model LegalRule {
-  id                     String    @id @default(uuid())
-  ruleCode               String    // e.g. R6_1_A_MFG_INFO
-  ruleNumber             String    // e.g. Rule 6(1)(a)
-  subRule                String?   // e.g. (1)
-  clause                 String?   // e.g. (a)
-  schedule               String?   // e.g. Second Schedule
+  id                     String       @id @default(uuid())
+  ruleCode               String
+  ruleNumber             String
+  subRule                String?
+  clause                 String?
+  schedule               String?
   title                  String
   requirementText        String
-  applicabilityCondition String    // JSON string describing applicability logic
-  validationType         String    // REQUIRED_FIELD, TEXT_MATCH, RANGE_CHECK, etc.
-  parameters             String?   // JSON parameters for rule execution
-  exceptions             String?   // JSON exceptions
-  capabilityClass        String    @default("STRUCTURED_DATA_CHECKABLE") // IMAGE_CHECKABLE, OCR_CHECKABLE, STRUCTURED_DATA_CHECKABLE, MANUAL_VISUAL_CHECK, PHYSICAL_MEASUREMENT_REQUIRED, EXTERNAL_DOCUMENT_REQUIRED, LEGAL_REVIEW_REQUIRED
+  applicabilityCondition String
+  validationType         String
+  parameters             String?
+  exceptions             String?
+  capabilityClass        String       @default("STRUCTURED_DATA_CHECKABLE")
   sourceSourceId         String?
-  sourceDocument         LegalSource? @relation(fields: [sourceSourceId], references: [id])
   sourcePage             Int
   sourceText             String
-  effectiveFrom          String    @default("2011-04-01")
+  effectiveFrom          String       @default("2011-04-01")
   effectiveTo            String?
-  version                Int       @default(1)
-  status                 String    @default("ACTIVE") // DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, SUPERSEDED, REJECTED
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-
+  version                Int          @default(1)
+  status                 String       @default("ACTIVE")
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  sourceDocument         LegalSource? @relation(fields: [sourceSourceId], references: [id])
   ruleResults            RuleResult[]
 }
 
 model Product {
-  id              String   @id @default(uuid())
+  id              String       @id @default(uuid())
   name            String
   brand           String?
-  category        String   // Food, Beverage, Cosmetics, Household, Personal Care, Clothing/Textile, Electronics, Stationery, Pharmaceutical, Other
-  packageType     String?  // Box, Bottle, Pouch, Wrapper, Can, Bag
+  category        String
+  packageType     String?
   manufacturer    String?
   packer          String?
   importer        String?
   countryOfOrigin String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
   inspections     Inspection[]
 }
 
 model Inspection {
-  id                    String   @id @default(uuid())
-  inspectionNumber      String   @unique
-  productId             String?
-  product               Product? @relation(fields: [productId], references: [id])
-  inspectorId           String
-  inspector             User     @relation(fields: [inspectorId], references: [id])
-  status                String   @default("DRAFT") // DRAFT, PROCESSING, READY_FOR_REVIEW, COMPLETED, ARCHIVED
-  overallResult         String   @default("REVIEW") // PASS, FAIL, REVIEW, NOT_APPLICABLE
-  complianceScore       Float    @default(0.0)
-  scoreConfidence       Float    @default(0.0)
-  passedCount           Int      @default(0)
-  failedCount           Int      @default(0)
-  reviewCount           Int      @default(0)
-  naCount               Int      @default(0)
-  pdpFace               String   @default("FRONT") // FRONT, BACK, LEFT_SIDE, RIGHT_SIDE, TOP, BOTTOM
-  pdpDeterminationMethod String  @default("AI") // AI, MANUAL
-  ruleVersionUsed       String   @default("2011-V1")
-  notes                 String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  images           InspectionImage[]
-  extractedFields  ExtractedField[]
-  ruleResults      RuleResult[]
-  reports          Report[]
+  id                     String            @id @default(uuid())
+  inspectionNumber       String            @unique
+  productId              String?
+  inspectorId            String
+  status                 String            @default("DRAFT")
+  overallResult          String            @default("REVIEW")
+  complianceScore        Float             @default(0.0)
+  scoreConfidence        Float             @default(0.0)
+  passedCount            Int               @default(0)
+  failedCount            Int               @default(0)
+  reviewCount            Int               @default(0)
+  naCount                Int               @default(0)
+  pdpFace                String            @default("FRONT")
+  pdpDeterminationMethod String            @default("AI")
+  ruleVersionUsed        String            @default("2011-V1")
+  notes                  String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  extractedFields        ExtractedField[]
+  inspector              User              @relation(fields: [inspectorId], references: [id])
+  product                Product?          @relation(fields: [productId], references: [id])
+  images                 InspectionImage[]
+  reports                Report[]
+  ruleResults            RuleResult[]
 }
 
 model InspectionImage {
-  id             String   @id @default(uuid())
-  inspectionId   String
-  inspection     Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-  imageType      String   @default("FRONT") // FRONT, BACK, SIDE, TOP_BOTTOM, CLOSEUP
-  originalPath   String
-  processedPath  String?
-  qualityStatus  String   @default("GOOD") // GOOD, BLURRY, INSUFFICIENT_QUALITY
-  resolution     String?
-  fileSize       Int?
-  uploadedAt     DateTime @default(now())
-
-  ocrResults     OcrResult[]
+  id              String           @id @default(uuid())
+  inspectionId    String
+  imageType       String           @default("FRONT")
+  originalPath    String
+  processedPath   String?
+  qualityStatus   String           @default("GOOD")
+  resolution      String?
+  fileSize        Int?
+  uploadedAt      DateTime         @default(now())
   extractedFields ExtractedField[]
-  ruleResults    RuleResult[]
+  inspection      Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  ocrResults      OcrResult[]
+  ruleResults     RuleResult[]
 }
 
 model OcrResult {
-  id                String   @id @default(uuid())
+  id                String          @id @default(uuid())
   inspectionImageId String
-  image             InspectionImage @relation(fields: [inspectionImageId], references: [id], onDelete: Cascade)
   fullText          String
   confidence        Float
-  boundingBoxesJson String   // JSON bounding box array
-  rawOcrJson        String?  // Raw vendor response
-  provider          String   @default("tesseract")
-  processedAt       DateTime @default(now())
+  boundingBoxesJson String
+  rawOcrJson        String?
+  provider          String          @default("tesseract")
+  processedAt       DateTime        @default(now())
+  image             InspectionImage @relation(fields: [inspectionImageId], references: [id], onDelete: Cascade)
 }
 
 model ExtractedField {
-  id                String   @id @default(uuid())
-  inspectionId      String
-  inspection        Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-  fieldKey          String   // e.g. mrp, net_quantity, mfg_date, mfg_name, complaint_email
-  fieldLabel        String
-  rawValue          String?
-  normalizedValue   String?
-  originalText      String?  // Original script text (e.g. "நிகர அளவு: 100 கிராம்")
-  language          String?  @default("en") // en, hi, ta, te, kn, ml, bn, mr, gu, pa, or, as, ur
-  script            String?  @default("Latin") // Devanagari, Tamil, Telugu, Kannada, Malayalam, etc.
-  languageConfidence Float?  @default(0.95)
-  unit              String?
-  confidence        Float    @default(0.0)
-  sourceFace        String?  // FRONT, BACK, LEFT_SIDE, RIGHT_SIDE, TOP, BOTTOM
-  detectedFace      String?  // FRONT, BACK, LEFT_SIDE, RIGHT_SIDE, TOP, BOTTOM
-  placementStatus   String?  // DETECTED_CORRECT_PDP, DETECTED_WRONG_PDP, NOT_DETECTED
-  sourceImageId     String?
-  sourceImage       InspectionImage? @relation(fields: [sourceImageId], references: [id])
-  sourceRegionJson  String?  // Bounding box for visual evidence
-  sourceText        String?
-  measurementsJson  String?  // Visual measurement data (font height, clearance, etc.)
-  extractionMethod  String   @default("AI_ASSISTED") // OCR_PARSER, AI_ASSISTED, MANUAL
-  reviewRequired    Boolean  @default(false)
-  isCorrected       Boolean  @default(false)
-  correctedValue    String?
-  correctedByUserId String?
-  correctedByUser   User?    @relation("CorrectedBy", fields: [correctedByUserId], references: [id])
-  correctedAt       DateTime?
-  correctionReason  String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String           @id @default(uuid())
+  inspectionId       String
+  fieldKey           String
+  fieldLabel         String
+  rawValue           String?
+  normalizedValue    String?
+  originalText       String?
+  language           String?          @default("en")
+  script             String?          @default("Latin")
+  languageConfidence Float?           @default(0.95)
+  unit               String?
+  confidence         Float            @default(0.0)
+  sourceFace         String?
+  detectedFace       String?
+  placementStatus    String?
+  sourceImageId      String?
+  sourceRegionJson   String?
+  sourceText         String?
+  measurementsJson   String?
+  extractionMethod   String           @default("AI_ASSISTED")
+  reviewRequired     Boolean          @default(false)
+  isCorrected        Boolean          @default(false)
+  correctedValue     String?
+  correctedByUserId  String?
+  correctedAt        DateTime?
+  correctionReason   String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  correctedByUser    User?            @relation("CorrectedBy", fields: [correctedByUserId], references: [id])
+  inspection         Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  sourceImage        InspectionImage? @relation(fields: [sourceImageId], references: [id])
 }
 
 model RuleResult {
-  id                 String   @id @default(uuid())
+  id                 String           @id @default(uuid())
   inspectionId       String
-  inspection         Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   ruleId             String
-  rule               LegalRule  @relation(fields: [ruleId], references: [id])
   ruleCode           String
   ruleNumber         String
-  result             String   // PASS, FAIL, REVIEW, NOT_APPLICABLE
+  result             String
   requirementText    String
   extractedValue     String?
   originalText       String?
-  language           String?  @default("en")
-  script             String?  @default("Latin")
-  languageConfidence Float?   @default(0.95)
+  language           String?          @default("en")
+  script             String?          @default("Latin")
+  languageConfidence Float?           @default(0.95)
   expectedCondition  String?
   reason             String
-  confidence         Float    @default(1.0)
-  sourceFace         String?  // FRONT, BACK, LEFT_SIDE, RIGHT_SIDE, TOP, BOTTOM
-  detectedFace       String?  // FRONT, BACK, LEFT_SIDE, RIGHT_SIDE, TOP, BOTTOM
-  placementStatus    String?  // DETECTED_CORRECT_PDP, DETECTED_WRONG_PDP, NOT_DETECTED
+  confidence         Float            @default(1.0)
+  sourceFace         String?
+  detectedFace       String?
+  placementStatus    String?
   evidenceImageId    String?
-  evidenceImage      InspectionImage? @relation(fields: [evidenceImageId], references: [id])
-  evidenceRegionJson String?  // Bounding box or visual coordinate evidence
-  measurementsJson   String?  // Visual measurement details (pixel font height, mm estimation, clearance, etc.)
+  evidenceRegionJson String?
+  measurementsJson   String?
   sourcePage         Int?
-  ruleVersion        Int      @default(1)
-  evaluatedAt        DateTime @default(now())
+  ruleVersion        Int              @default(1)
+  evaluatedAt        DateTime         @default(now())
+  evidenceImage      InspectionImage? @relation(fields: [evidenceImageId], references: [id])
+  inspection         Inspection       @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  rule               LegalRule        @relation(fields: [ruleId], references: [id])
 }
 
 model RuleUpdate {
-  id                String   @id @default(uuid())
-  sourceUrl         String?
-  documentHash      String
-  detectedAt        DateTime @default(now())
-  documentVersion   String
-  effectiveDate     String?
-  previousVersion   String?
-  newVersion        String
-  changeSummary     String
-  approvalStatus    String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  approvedByUserId  String?
-  approvedByUser    User?    @relation("ApprovedBy", fields: [approvedByUserId], references: [id])
-  approvedAt        DateTime?
-  createdAt         DateTime @default(now())
-
-  diffs             RuleChangeDiff[]
+  id               String           @id @default(uuid())
+  sourceUrl        String?
+  documentHash     String
+  detectedAt       DateTime         @default(now())
+  documentVersion  String
+  effectiveDate    String?
+  previousVersion  String?
+  newVersion       String
+  changeSummary    String
+  approvalStatus   String           @default("PENDING")
+  approvedByUserId String?
+  approvedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  diffs            RuleChangeDiff[]
+  approvedByUser   User?            @relation("ApprovedBy", fields: [approvedByUserId], references: [id])
 }
 
 model RuleChangeDiff {
-  id             String   @id @default(uuid())
-  ruleUpdateId   String
-  ruleUpdate     RuleUpdate @relation(fields: [ruleUpdateId], references: [id], onDelete: Cascade)
-  ruleCode       String
-  changeType     String   // ADDED, REMOVED, MODIFIED, APPLICABILITY_CHANGED, EFFECTIVE_DATE_CHANGED
-  oldRuleText    String?
-  newRuleText    String?
-  aiSummary      String?
+  id           String     @id @default(uuid())
+  ruleUpdateId String
+  ruleCode     String
+  changeType   String
+  oldRuleText  String?
+  newRuleText  String?
+  aiSummary    String?
+  ruleUpdate   RuleUpdate @relation(fields: [ruleUpdateId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {
   id           String   @id @default(uuid())
   userId       String?
-  user         User?    @relation(fields: [userId], references: [id])
   userEmail    String?
-  action       String   // e.g. LOGIN, INSPECTION_CREATED, FIELD_CORRECTED, RULE_APPROVED
-  entity       String   // e.g. Inspection, LegalRule, User
+  action       String
+  entity       String
   entityId     String?
   oldValueJson String?
   newValueJson String?
   ipAddress    String?
   timestamp    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
 }
 
 model Report {
-  id                 String   @id @default(uuid())
-  inspectionId       String
-  inspection         Inspection @relation(fields: [inspectionId], references: [id])
-  reportPath         String
-  generatedAt        DateTime @default(now())
-  generatedByUserId  String
-  generatedByUser    User     @relation(fields: [generatedByUserId], references: [id])
+  id                String     @id @default(uuid())
+  inspectionId      String
+  reportPath        String
+  generatedAt       DateTime   @default(now())
+  generatedByUserId String
+  generatedByUser   User       @relation(fields: [generatedByUserId], references: [id])
+  inspection        Inspection @relation(fields: [inspectionId], references: [id])
 }
