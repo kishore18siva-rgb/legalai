@@ -54,7 +54,7 @@ class OcrService {
         }
         catch (e) { }
         console.log(`[OCR DIAGNOSTIC START] face=${imageType} mime=image/png size=${fileSize} dims=${width}x${height} hash=${imageHash} file=${originalName || path_1.default.basename(imagePath)}`);
-        if (quality === 'INSUFFICIENT_QUALITY') {
+        if (quality === 'INSUFFICIENT_QUALITY' || process.env.OCR_PROVIDER === 'mock' || process.env.OCR_PROVIDER === 'pattern') {
             quality = 'GOOD';
             return this.fallbackPatternOcr(searchPath, quality, imageType);
         }
